@@ -88,7 +88,7 @@ h1{font-size:38px;line-height:1.05;margin:0 0 6px;font-weight:900}h1 i{color:var
     <div class="row"><span>Swing with</span><div class="seg" id="modeSeg"><button data-v="motion">Phone motion</button><button data-v="touch">Swipe</button></div></div>
     <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
     <button id="goBtn" class="big">Take the court</button>
-    <p class="note">Phone motion: hold your phone like a racket handle and swing through. In a match, the game first asks for one forehand and one backhand so it can tell your strokes apart. Swipe: flick right to left for a forehand, left to right for a backhand (mirrored if you play left-handed). Give yourself room to move and swing.</p>
+    <p class="note">Phone motion: hold your phone like a racket handle and swing through. In a match, the game first asks for one forehand and one backhand so it can tell your strokes apart. Swipe: flick right to left for a forehand, left to right for a backhand (mirrored if you play left-handed). Swipe slightly upward for topspin, downward for slice. With phone motion, the tilt of your phone at contact is the racket face: roll it over for topspin, open it up for slice. Give yourself room to move and swing.</p>
   </div>
 </section>
 
@@ -166,6 +166,7 @@ function setRacket(u,fh){const s=fh;racketG.position.set(.32*s*HS(),1.0,.45);con
 let state='menu',feed=null,nextAt=0,paused=true,anim=null,shot=null;
 const stats={pts:0,streak:0,top:0,balls:0};
 let cal=null;try{cal=JSON.parse(localStorage.getItem('swingtenniscal')||'null')}catch(e){}
+let lastG=null;const rollOf=g=>g?Math.atan2(g.x,g.z)/DEG:0;const wrapD=a=>((a+540)%360)-180;
 let quickNext=false,score=[0,0],games=[0,0],rally=0,matchOver=false,steps=0,lastStep=0,stepBase=9.8,calStage=0;
 const NAMES=['love','fifteen','thirty','forty'];
 function scoreText(){const[a,b]=score;if(a>=3&&b>=3)return a===b?'Deuce':a>b?'Advantage you':'Advantage opponent';return a===b?(a?NAMES[a]+' all':'Love all'):NAMES[Math.min(a,3)]+' '+NAMES[Math.min(b,3)]}
@@ -183,13 +184,14 @@ function newFeed(quick){
  const start=new THREE.Vector3(match?oppX:rand(-.2,.2),1.0,FAR-.7),zb=rand(-6.2,-4.4),xb=xc*.8;
  const d1=Math.hypot(xb-start.x,zb-start.z),T1=d1/vh,vy0=(0-start.y+.5*G*T1*T1)/T1,vyb=vy0-G*T1;
  const vh2=vh*.72,v2y=-vyb*.72,d2=Math.hypot(xc-xb,.3-zb),T2=d2/vh2;
- const now=performance.now(),tl=now+(quick?120:650),tb=tl+T1*1000,tc=tb+T2*1000;
+ const GAP=.36,now=performance.now(),wind=Math.max(quick?120:650,(2*GAP+.35-(T1+T2))*1000),tl=now+wind,tb=tl+T1*1000,tc=tb+T2*1000;
  feed={fh,mph,start,xb,zb,xc,vh,vh2,vy0,v2y,T1,T2,tl,tb,tc,done:false,swung:false,res:null,sounded:false,wide,s0:steps};PAN=clamp(xc/1.25,-1,1)*.85;const dirW=xc>0?'right':'left',stroke=fh>0?'Forehand':'Backhand';speak(wide&&mode==='motion'?`Step ${dirW}, ${stroke.toLowerCase()}`:`${stroke}, ${dirW}`);window.__feed=feed;
  state='windup';stats.balls++;machineLight.material.color.set(0xd7f23a);
  const later=(ms,fn)=>setTimeout(()=>{ac();PAN=clamp(xc/1.25,-1,1)*.85;fn();PAN=0},Math.max(0,ms));
  later(tb-now,()=>sfx.bounce(0));
- const gap=Math.min(.38,(tc-tl)/3000);
- [[2,'3'],[1,'2'],[0,'HIT!']].forEach(([k,txt])=>{const at=tc-k*gap*1000;later(at-now-8,()=>tone(k?880:1560,k?.07:.13,k?.32:.55,0,k?'sine':'square'));
+ const gap=GAP,first=tc-2*gap*1000;
+ later(first-now-40,()=>{const a=ac();if(!a)return;const lead=Math.max(0,(first-performance.now())/1000);for(const k of[2,1,0])tone(k?880:1560,.1,k?.32:.55,lead+(2-k)*gap,k?'sine':'square')});
+ [[2,'3'],[1,'2'],[0,'HIT!']].forEach(([k,txt])=>{const at=tc-k*gap*1000;
   setTimeout(()=>{if(feed&&!feed.done||!k){const c=$('#cue');c.textContent=txt;c.style.fontSize=k?'34px':'52px';c.style.transition='none';c.style.opacity=1;requestAnimationFrame(()=>{c.style.transition='opacity .3s';c.style.opacity=0})}},Math.max(0,at-now))});
  PAN=0;showBoard(wide&&mode==='motion'?(xc>0?'Step right →':'← Step left'):(xc<0?'← ':'')+(fh>0?'Forehand':'Backhand')+(xc>0?' →':''),wide&&mode==='motion'?(fh>0?'Forehand':'Backhand'):`On your ${xc>0?'right':'left'} · ${Math.round(mph)} mph`,[],1300);armMotion();
 }
@@ -199,7 +201,7 @@ function simShot(v,la,dir,top,y0){let x=0,y=y0||1,z=0,vx=Math.sin(dir)*Math.cos(
  while(y>0&&z>-40){const s=Math.hypot(vx,vy,vz);vx-=KD*s*vx*dt;vz-=KD*s*vz*dt;vy-=(G+top+KD*s*vy)*dt;const pz=z;x+=vx*dt;y+=vy*dt;z+=vz*dt;if(net===null&&pz>NETZ&&z<=NETZ)net=y}
  return{x,z,net}}
 function contactSound(t){if(!feed||feed.done||feed.sounded)return;const err=(t-feed.tc)/1000;if(Math.abs(err)>.14)return;if(feed.wide&&mode==='motion'&&steps-feed.s0<1)return;feed.sounded=true;const d=Math.max(0,Math.max(t,feed.tc)-performance.now());PAN=clamp(feed.xc/1.25,-1,1)*.6;sfx.pop(d/1000);PAN=0;setTimeout(()=>buzz(30),d)}
-function attempt(tHit,mph,strokeFh){
+function attempt(tHit,mph,strokeFh,face){face=face||0;
  if(!feed||feed.done||feed.swung)return;feed.swung=true;anim={t0:tHit-120,dur:240,fh:feed.fh};
  const err=(tHit-feed.tc)/1000,ms=Math.round(err*1000);
  if(feed.wide&&mode==='motion'&&steps-feed.s0<1){feed.res={miss:true,ms,mph,why:"You didn't get there"};sfx.whiff();return}
@@ -209,14 +211,16 @@ function attempt(tHit,mph,strokeFh){
  const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.115,1.4),0,1);
  const pull=feed.fh*HS();
  const dir=clamp((-err/.14)*16*pull+rand(-3,3),-28,28)*DEG*1;
- const out=clamp((.3*feed.mph+1.05*mph)*(.55+.45*q),15,120);
- const top=q>.6?7:3,v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
+ const kind=face>45?'overcooked':face>14?'topspin':face<-45?'wide open':face<-14?'slice':'flat';
+ const out=clamp((.3*feed.mph+1.05*mph)*(.55+.45*q)*(kind==='slice'||kind==='wide open'?.82:kind==='flat'?1:.92),15,120);
+ const top=(q>.6?4:2)+clamp(face,-40,60)*.25,v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
  const y0=clamp(feedPos(feed.T1+feed.T2).y,.35,1.5);
  for(let i=0;i<16;i++){const m=(lo+hi)/2;if(simShot(v,m*DEG,dir,top,y0).z>zt)lo=m;else hi=m}
  let laD=(lo+hi)/2;for(let i=0;i<20&&(simShot(v,laD*DEG,dir,top,y0).net||0)<1.08;i++)laD+=.5;
+ if(kind==='overcooked')laD-=6+(face-45)*.12;if(kind==='wide open')laD+=6+(-face-45)*.15;
  const la=(laD+(1-q)*rand(-1,1)*8)*DEG;
  const r=simShot(v,la,dir,top,y0);
- feed.res={miss:false,ms,mph,out,la,dir,q,top,...r};
+ feed.res={miss:false,ms,mph,out,la,dir,q,top,kind,...r};
  setTimeout(()=>launchShot(feed),Math.max(0,feed.tc-performance.now()));
 }
 function launchShot(f){if(f!==feed||f.done)return;const r=f.res,v=r.out*.44704;const p=feedPos(f.T1+f.T2);
@@ -231,19 +235,20 @@ function finish(f){
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;p=corner?3:deep?2:1;t=corner?'Corner winner!':deep?'Deep and in':'In'}
   if(p){stats.pts+=p;stats.streak++}else stats.streak=0;stats.top=Math.max(stats.top,r.out);
   const where=r.dir*feed.fh*HS()<-.08?'down the line':r.dir*feed.fh*HS()>.08?'cross-court':'up the middle';
-  showBoard(t+(p?` +${p}`:''),`${Math.abs(r.ms)<=25?'Perfect timing':Math.abs(r.ms)+' ms '+(r.ms<0?'early':'late')} · ${where}`,[[Math.round(r.mph),'racket mph'],[Math.round(r.out),'ball mph'],[p?((-r.z-11.885)).toFixed(1)+' m':'–','past net']],3000);
+  showBoard(t+(p?` +${p}`:''),`${kindName(r.kind)} · ${Math.abs(r.ms)<=25?'perfect timing':Math.abs(r.ms)+' ms '+(r.ms<0?'early':'late')} · ${where}`,[[Math.round(r.mph),'racket mph'],[Math.round(r.out),'ball mph'],[p?((-r.z-11.885)).toFixed(1)+' m':'–','past net']],3000);
   if(p===3){tone(660,.15,.3,0);tone(990,.25,.3,.15)}speak(t)}
  updHud();state='after';nextAt=performance.now()+(r&&!r.miss?1900:1500);
 }
 
+const kindName=k=>({topspin:'Topspin',slice:'Slice',flat:'Flat',overcooked:'Rolled over too much','wide open':'Face too open'}[k]||'Flat');
 function finishMatch(f){
  f.done=true;machineLight.material.color.set(0x334400);const r=f.res,now=performance.now();let next=2700;
  if(!r||r.miss){const why=!r?'No swing':r.why?(r.why.startsWith('You didn')?'Too slow, step on the call':r.why):(r.ms<0?'Too early':'Too late');showBoard(why,'Point to your opponent',[],2600);pointTo(1,why,f.wide&&mode==='motion'?'Back to the middle.':'')}
  else{let t=null;const inX=Math.abs(r.x)<=HW,inZ=r.z<NETZ&&r.z>=FAR;stats.top=Math.max(stats.top,r.out);
   if(r.net!==null&&r.net<.95)t='Into the net';else if(!inX&&inZ)t='Wide';else if(!inZ)t=r.z<FAR?'Long':'Short';
-  if(t){showBoard(t,'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t,f.wide&&mode==='motion'?'Back to the middle.':'')}
+  if(t){showBoard(t,r.kind==='overcooked'?'Face too closed, it dipped':r.kind==='wide open'?'Face too open, it sailed':'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t,f.wide&&mode==='motion'?'Back to the middle.':'')}
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;let ret=corner?.3:deep?.6:.82;if(r.out>85)ret*=.8;rally++;
-   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`Rally ${rally} · they got it back`,[[Math.round(r.out),'ball mph']],1500);next=Math.max(450,23/(r.out*.44704*.85)*1000)+120;quickNext=true;if(f.wide&&mode==='motion')speak('Back to the middle')}
+   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`${kindName(r.kind)} · rally ${rally}`,[[Math.round(r.out),'ball mph']],1500);next=Math.max(450,23/(r.out*.44704*.85)*1000)+120;quickNext=true;if(f.wide&&mode==='motion')speak('Back to the middle')}
    else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);oppX=0;pointTo(0,w,f.wide&&mode==='motion'?'Back to the middle.':'')}}}
  updHud();state='after';nextAt=now+next;
  if(matchOver){setTimeout(()=>{showBoard(games[0]>games[1]?'You win!':'Match lost',`${games[0]}–${games[1]} in games`,[],6000);setPaused(true);$('#feedBtn').textContent='New match'},1800)}
@@ -255,22 +260,22 @@ function armMotion(){mot.armed=mode==='motion';mot.active=false;mot.tHit=0}
 function onMotion(e){const r=e.rotationRate;const rr=r&&r.alpha!=null?Math.hypot(r.alpha||0,r.beta||0,r.gamma||0):null;const a=e.acceleration;const am=a&&a.x!=null?Math.hypot(a.x,a.y,a.z):null;
  if(rr==null&&am==null)return;mot.live=true;
  const gi=e.accelerationIncludingGravity,now=performance.now(),s=rr!=null?rr:am*45,comp=rr!=null?[r.alpha||0,r.beta||0,r.gamma||0]:null;
- if(gi&&gi.x!=null){const m=Math.hypot(gi.x,gi.y,gi.z);stepBase=stepBase*.93+m*.07;if(m-stepBase>2.3&&now-lastStep>300&&s<200){steps++;lastStep=now;if(feed&&feed.wide&&!feed.done&&steps-feed.s0===1){PAN=clamp(feed.xc/1.25,-1,1)*.6;tone(620,.06,.18,0);PAN=0}}}
+ if(gi&&gi.x!=null){lastG={x:gi.x,y:gi.y,z:gi.z};const m=Math.hypot(gi.x,gi.y,gi.z);stepBase=stepBase*.93+m*.07;if(m-stepBase>2.3&&now-lastStep>300&&s<200){steps++;lastStep=now;if(feed&&feed.wide&&!feed.done&&steps-feed.s0===1){PAN=clamp(feed.xc/1.25,-1,1)*.6;tone(620,.06,.18,0);PAN=0}}}
  if(calStage&&comp&&mode==='motion'){if(s>700&&now-(mot.calT||0)>900){mot.calT=now;let ai=0;for(let i=1;i<3;i++)if(Math.abs(comp[i])>Math.abs(comp[ai]))ai=i;
-   if(calStage===1){mot.calA=[ai,Math.sign(comp[ai])];calStage=2;tone(990,.08,.3,0);speak('Now a backhand');showBoard('Now a backhand','Swing one backhand',[],4000)}
-   else{const[a0,s0]=mot.calA;cal=a0===ai&&Math.sign(comp[ai])!==s0?{axis:a0,fh:s0}:null;calStage=0;try{if(cal)localStorage.setItem('swingtenniscal',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak("Got it. Let's play.");showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}}return}
+   if(calStage===1){mot.calA=[ai,Math.sign(comp[ai])];mot.calFr=rollOf(lastG);calStage=2;tone(990,.08,.3,0);speak('Now a backhand');showBoard('Now a backhand','Swing one backhand',[],4000)}
+   else{const[a0,s0]=mot.calA;cal=a0===ai&&Math.sign(comp[ai])!==s0?{axis:a0,fh:s0,fr:mot.calFr,br:rollOf(lastG)}:null;calStage=0;try{if(cal)localStorage.setItem('swingtenniscal',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak("Got it. Let's play.");showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}}return}
  if(!mot.armed||!feed||feed.swung||feed.done)return;
  const start=240,full=1500*sens,hitAt=start+.45*(full-start);
- if(!mot.active){if(s>start){mot.active=true;mot.peak=0;mot.tHit=0;mot.low=0}else return}
+ if(!mot.active){if(s>start){mot.active=true;mot.peak=0;mot.tHit=0;mot.low=0;mot.r0=rollOf(lastG)}else return}
  mot.peak=Math.max(mot.peak,s);
- if(!mot.tHit&&s>hitAt){mot.tHit=now;const t=now,sfh=cal&&comp?Math.sign(comp[cal.axis])===cal.fh:null;const okMove=!(feed.wide&&steps-feed.s0<1),okStroke=!(play==='match'&&sfh!=null&&sfh!==(feed.fh>0));if(okMove&&okStroke)contactSound(t+20);setTimeout(()=>{const mph=rr!=null?mot.peak*DEG*1.0*2.237:clamp(mot.peak/full,0,1.2)*70;mot.armed=false;attempt(t+20,clamp(mph,15,95),sfh)},80)}
+ if(!mot.tHit&&s>hitAt){mot.tHit=now;const t=now,sfh=cal&&comp?Math.sign(comp[cal.axis])===cal.fh:null;const isFh=sfh!=null?sfh:feed.fh>0,neutral=cal&&cal.fr!=null?(isFh?cal.fr:cal.br):mot.r0,face=lastG?clamp(wrapD(rollOf(lastG)-neutral)*(isFh?1:-1)*HS(),-80,80):0;const okMove=!(feed.wide&&steps-feed.s0<1),okStroke=!(play==='match'&&sfh!=null&&sfh!==(feed.fh>0));if(okMove&&okStroke)contactSound(t+20);setTimeout(()=>{const mph=rr!=null?mot.peak*DEG*1.0*2.237:clamp(mot.peak/full,0,1.2)*70;mot.armed=false;attempt(t+20,clamp(mph,15,95),sfh,face)},80)}
  if(s<start*.5){mot.low=mot.low||now;if(now-mot.low>250)mot.active=false}else mot.low=0}
 async function enableMotion(){try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')return false}}catch(e){return false}
  if(!mot.listening){addEventListener('devicemotion',onMotion);mot.listening=true}await new Promise(r=>setTimeout(r,900));return mot.live}
 const pad=$('#pad');let sw=null;
-pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);sw={x:e.clientX,pts:[[e.clientX,e.timeStamp]],fired:false}});
+pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);sw={x:e.clientX,y:e.clientY,pts:[[e.clientX,e.timeStamp]],fired:false}});
 pad.addEventListener('pointermove',e=>{if(!sw||sw.fired)return;sw.pts.push([e.clientX,e.timeStamp]);if(Math.abs(e.clientX-sw.x)>70){sw.fired=true;const p=sw.pts;let i=p.length-1;while(i>0&&e.timeStamp-p[i][1]<70)i--;const v=Math.abs(e.clientX-p[i][0])/Math.max(e.timeStamp-p[i][1],1);
- const mph=clamp(20+v*15/Math.sqrt(sens),20,85),sfh=((e.clientX-sw.x)<0)===(HS()>0);if(feed&&!feed.done&&!feed.swung)attempt(e.timeStamp,mph,sfh)}});
+ const mph=clamp(20+v*15/Math.sqrt(sens),20,85),sfh=((e.clientX-sw.x)<0)===(HS()>0),face=clamp(-(e.clientY-sw.y)/Math.max(Math.abs(e.clientX-sw.x),1)*70,-80,80);if(feed&&!feed.done&&!feed.swung)attempt(e.timeStamp,mph,sfh,face)}});
 pad.addEventListener('pointerup',()=>{sw=null});
 
 // ---------- loop ----------
