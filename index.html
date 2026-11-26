@@ -122,9 +122,10 @@ th:first-child,td:first-child{text-align:left;color:var(--mute)}
 <section id="menu" class="ov">
   <div class="card">
     <h1>Swing <i>Links</i></h1>
-    <p>Pick a course, pick a club, and swing your phone like the real thing.</p>
+    <p>Golf, baseball, bowling and tennis, all played by swinging your phone like the real thing.</p>
     <div id="courses"></div>
     <div class="row"><span>Swing with</span><div class="seg" id="modeSeg"><button data-v="motion">Phone motion</button><button data-v="touch">Swipe</button></div></div>
+    <div class="row"><span>Golfer</span><div class="seg" id="handSeg"><button data-v="R">Right-handed</button><button data-v="L">Left-handed</button></div></div>
     <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
     <button id="startBtn" class="big">Tee off</button>
     <p class="note" id="mNote">Phone motion: grip your phone like a club handle, screen facing you, and swing. Speed sets distance, wrist roll at impact bends it into a draw or fade. Swipe: pull down for the backswing, then flick up through the ball. A longer pull goes further, and sideways drift curves it.</p>
@@ -216,6 +217,7 @@ function fit(h,Wd,Hd){const rot=Math.atan2(h.pin[0],h.pin[1]),c=Math.cos(rot),s=
 
 // ---------- game state ----------
 let list=null,holes=[],hi=0,hole=null,scores=[],strokes=0,phase='menu',aim=0,clubI=0,prev={x:0,y:0},trail=[],overview=false;
+let hand='R';try{hand=localStorage.getItem('swinghand')||'R'}catch(e){}
 let mode='motion',sens=1,sel=0,wind={x:0,y:0,mph:0,dir:0};
 const ball={x:0,y:0,z:0,vx:0,vy:0,vz:0,spin:0,ph:'rest',lip:false};
 const cam={x:0,y:0,s:2,rot:0};
@@ -287,7 +289,7 @@ function shoot(power,face,mph){
  shotL={club:c.n,mph,ball:bmph,carry:null,off:0,est:mode!=='motion'};shotAim=aim;
  ball.bounced=false;ball.thru=new Set();if(c.putt)ball.back=0;
  shotDir=dir;phase='fly';sfx(c.putt?'putt':'hit');buzz(c.putt?15:35);hud();
- const spinTxt=c.putt||!spinSel?'':spinSel<0?' · Backspin':' · Topspin';const shape=c.putt?'':Math.abs(face)<.15?'Pure strike':face>0?(face>.5?'Slice':'Fade'):(face<-.5?'Hook':'Draw');
+ const spinTxt=c.putt||!spinSel?'':spinSel<0?' · Backspin':' · Topspin';const hf=face*(hand==='L'?-1:1),shape=c.putt?'':Math.abs(hf)<.15?'Pure strike':hf>0?(hf>.5?'Slice':'Fade'):(hf<-.5?'Hook':'Draw');
  toast(`${Math.round(mph)} mph swing · ${Math.round(bmph)} mph ball${shape?' · '+shape:''}${spinTxt}`,1500);showStats();
 }
 function step(dt){
@@ -526,7 +528,7 @@ function impact(pk,tp,start,full,putt){
  mot.active=false;mot.armed=false;const c=CLUBS[clubI];
  const power=clamp((pk-start)/(full-start),.04,1.15);
  const near=mot.buf.filter(b=>Math.abs(b[0]-tp)<60),gAvg=near.reduce((x,b)=>x+b[2],0)/(near.length||1);
- let face=clamp(gAvg/(pk*.35),-1,1)*.8;if(power>1)face=clamp(face+(Math.random()-.5)*.8,-1,1);
+ let face=clamp(gAvg/(pk*.35),-1,1)*.8*(hand==='L'?-1:1);if(power>1)face=clamp(face+(Math.random()-.5)*.8,-1,1);
  const mph=mot.rr&&!putt?pk*DEG*c.r*2.237*SENSMUL():null;shoot(power,face,mph);
 }
 async function enableMotion(){
@@ -561,9 +563,14 @@ $('#rNext').onclick=()=>{$('#res').hidden=true;if(hi>=holes.length-1){hi=0;score
 function segInit(id,val,set){const s=$(id);const upd=v=>s.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===String(v)));upd(val);s.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);upd(b.dataset.v)})}
 try{const st=JSON.parse(localStorage.getItem('swinglinks')||'{}');if(st.mode)mode=st.mode;if(st.sens)sens=+st.sens;if(st.sel!=null)sel=+st.sel}catch(e){}
 const save=()=>{try{localStorage.setItem('swinglinks',JSON.stringify({mode,sens,sel}))}catch(e){}};
-segInit('#modeSeg',mode,v=>{mode=v;save()});segInit('#sensSeg',sens,v=>{sens=+v;save()});
-$('#courses').innerHTML=PLAYLISTS.map((p,i)=>`<button class="course" data-i="${i}" aria-pressed="${i===sel}"><canvas width="112" height="152"></canvas><div><b>${p.name}</b><span>${p.range?'Practice':p.holes.length+' holes · Par '+p.holes.reduce((a,h)=>a+h.par,0)}</span><span>${p.blurb}</span></div></button>`).join('')+`<button class="course" id="cageCard"><canvas width="112" height="152"></canvas><div><b>Batting Cage</b><span>Baseball</span><span>Time your swing to the beep</span></div></button>`;
+segInit('#modeSeg',mode,v=>{mode=v;save()});segInit('#sensSeg',sens,v=>{sens=+v;save()});segInit('#handSeg',hand,v=>{hand=v;try{localStorage.setItem('swinghand',v)}catch(e){}});
+$('#courses').innerHTML=PLAYLISTS.map((p,i)=>`<button class="course" data-i="${i}" aria-pressed="${i===sel}"><canvas width="112" height="152"></canvas><div><b>${p.name}</b><span>${p.range?'Practice':p.holes.length+' holes · Par '+p.holes.reduce((a,h)=>a+h.par,0)}</span><span>${p.blurb}</span></div></button>`).join('')+`<button class="course" id="cageCard"><canvas width="112" height="152"></canvas><div><b>Batting Cage</b><span>Baseball</span><span>Hit it on the last beep</span></div></button><button class="course" id="bowlCard"><canvas width="112" height="152"></canvas><div><b>Strike Lanes</b><span>Bowling</span><span>10 frames, roll it underhand</span></div></button><button class="course" id="tennisCard"><canvas width="112" height="152"></canvas><div><b>Ball Machine</b><span>Tennis</span><span>Forehands and backhands on the beep</span></div></button>`;
 {const g=$('#cageCard canvas').getContext('2d');g.fillStyle='#24323a';g.fillRect(0,0,112,152);g.strokeStyle='rgba(255,255,255,.18)';for(let i=0;i<152;i+=12){g.beginPath();g.moveTo(0,i);g.lineTo(112,i);g.stroke()}for(let i=0;i<112;i+=12){g.beginPath();g.moveTo(i,0);g.lineTo(i,152);g.stroke()}g.fillStyle='#fff';g.beginPath();g.arc(56,76,30,0,TAU);g.fill();g.strokeStyle='#d8352a';g.lineWidth=3;g.beginPath();g.arc(20,76,30,-.9,.9);g.stroke();g.beginPath();g.arc(92,76,30,Math.PI-.9,Math.PI+.9);g.stroke();$('#cageCard').onclick=()=>{location.href='baseball.html'}}
+{const g=$('#bowlCard canvas').getContext('2d');const gr=g.createLinearGradient(0,0,0,152);gr.addColorStop(0,'#1d1631');gr.addColorStop(1,'#c8924f');g.fillStyle=gr;g.fillRect(0,0,112,152);g.fillStyle='#d9a868';g.beginPath();g.moveTo(40,20);g.lineTo(72,20);g.lineTo(104,152);g.lineTo(8,152);g.fill();
+ for(const[x,y]of[[56,30],[50,36],[62,36],[44,42],[56,42],[68,42]]){g.fillStyle='#fff';g.fillRect(x-2,y-8,4,9);g.fillStyle='#d61f2c';g.fillRect(x-2,y-6,4,1.5)}g.fillStyle='#2340d6';g.beginPath();g.arc(56,120,16,0,TAU);g.fill();g.fillStyle='#0b123d';for(const[a,b]of[[52,114],[60,114],[56,121]]){g.beginPath();g.arc(a,b,2,0,TAU);g.fill()}
+ $('#bowlCard').onclick=()=>{location.href='bowling.html'}}
+{const g=$('#tennisCard canvas').getContext('2d');g.fillStyle='#2e7d4f';g.fillRect(0,0,112,152);g.fillStyle='#2a6fc4';g.fillRect(14,10,84,132);g.strokeStyle='#fff';g.lineWidth=2;g.strokeRect(14,10,84,132);g.strokeRect(24,10,64,132);g.beginPath();g.moveTo(24,44);g.lineTo(88,44);g.moveTo(24,108);g.lineTo(88,108);g.moveTo(56,44);g.lineTo(56,108);g.stroke();g.fillStyle='#222';g.fillRect(8,74,96,3);g.fillStyle='#d7f23a';g.beginPath();g.arc(70,96,7,0,TAU);g.fill();
+ $('#tennisCard').onclick=()=>{location.href='tennis.html'}}
 document.querySelectorAll('.course[data-i]').forEach(b=>{const i=+b.dataset.i,h=PLAYLISTS[i].holes[i===4?7:0],g=b.querySelector('canvas').getContext('2d');g.setTransform(2,0,0,2,0,0);draw(g,56,76,h,fit(h,56,76),false,0);
  b.onclick=()=>{sel=i;save();document.querySelectorAll('.course[data-i]').forEach(x=>x.setAttribute('aria-pressed',x===b))}});
 $('#startBtn').onclick=async()=>{sfx('none');
