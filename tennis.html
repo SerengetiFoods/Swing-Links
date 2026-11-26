@@ -106,7 +106,7 @@ const HS=()=>hand==='L'?-1:1;
 // ---------- audio ----------
 let AC=null;const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
 let PAN=0;const outNode=a=>{if(!PAN||!a.createStereoPanner)return a.destination;const p=a.createStereoPanner();p.pan.value=PAN;p.connect(a.destination);return p};
-function speak(t){if(!voice)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.15;u.lang='en-US';speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
+function speak(t,queue){if(!voice)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.12;u.lang='en-US';if(!queue)speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}}
 function tone(f,dur,vol,at,type){const a=ac();if(!a)return;const t=a.currentTime+Math.max(0,at||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(outNode(a));o.start(t);o.stop(t+dur+.02)}
 function noise(dur,freq,type,vol,at){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(outNode(a));s.start(a.currentTime+Math.max(0,at||0))}
 const sfx={pop(at){noise(.06,1500,'bandpass',1.4,at);tone(420,.06,.4,at||0,'triangle')},bounce(at){noise(.05,700,'bandpass',.6,at)},whiff(){noise(.25,900,'bandpass',.35)},launch(){noise(.12,600,'lowpass',.5)}};
@@ -164,10 +164,10 @@ let score=[0,0],games=[0,0],rally=0,matchOver=false,steps=0,lastStep=0,stepBase=
 const NAMES=['love','fifteen','thirty','forty'];
 function scoreText(){const[a,b]=score;if(a>=3&&b>=3)return a===b?'Deuce':a>b?'Advantage you':'Advantage opponent';return a===b?(a?NAMES[a]+' all':'Love all'):NAMES[Math.min(a,3)]+' '+NAMES[Math.min(b,3)]}
 function scoreShort(){const[a,b]=score;if(a>=3&&b>=3)return a===b?'Deuce':a>b?'Ad In':'Ad Out';const n=['0','15','30','40'];return n[Math.min(a,3)]+'–'+n[Math.min(b,3)]}
-function pointTo(w,why){score[w]++;let call=scoreText(),gameWon=false;
+function pointTo(w,why,extra){score[w]++;let call=scoreText(),gameWon=false;
  if(score[w]>=4&&score[w]-score[1-w]>=2){games[w]++;score=[0,0];gameWon=true;call=`Game ${w?'opponent':'you'}. ${games[0]} games to ${games[1]}`;
   if(games[w]>=3){matchOver=true;call=w?`Game, set and match to your opponent, ${games[1]} games to ${games[0]}`:`Game, set and match! You win ${games[0]} games to ${games[1]}`}}
- speak(`${why}. ${call}.`);updHud();if(!w)buzz([40,60,40]);rally=0;return gameWon}
+ speak(`${why}. ${call}.${extra?' '+extra:''}`);updHud();if(!w)buzz([40,60,40]);rally=0;return gameWon}
 const board=$('#board');let boardT;
 function showBoard(t,sub,cells,ms){$('#bTitle').textContent=t;$('#bSub').textContent=sub||'';$('#bGrid').innerHTML=(cells||[]).map(c=>`<div><b>${c[0]}</b><span>${c[1]}</span></div>`).join('');$('#bGrid').style.display=cells&&cells.length?'grid':'none';board.classList.add('on');clearTimeout(boardT);if(ms)boardT=setTimeout(()=>board.classList.remove('on'),ms)}
 function updHud(){$('#hud .t b').textContent=play==='match'?'Tennis match':'Ball machine';if(play==='match'){$('#sPtsL').textContent='Score';$('#sPts').textContent=scoreShort();$('#sStrL').textContent='Games';$('#sStr').textContent=games[0]+'–'+games[1];$('#sTop').textContent=stats.top?Math.round(stats.top)+' mph':'–';$('#sub').textContent=matchOver?'Match over':`Rally ${rally} · first to 3 games`;return}$('#sPtsL').textContent='Points';$('#sStrL').textContent='Streak';$('#sub').textContent=`${speed===35?'Slow':speed===50?'Medium':'Fast'} feed · ${side==='mix'?'mixed':side==='fh'?'forehands':'backhands'}`;$('#sPts').textContent=stats.pts;$('#sStr').textContent=stats.streak;$('#sTop').textContent=stats.top?Math.round(stats.top)+' mph':'–'}
@@ -178,13 +178,13 @@ function newFeed(){
  const d1=Math.hypot(xb-start.x,zb-start.z),T1=d1/vh,vy0=(0-start.y+.5*G*T1*T1)/T1,vyb=vy0-G*T1;
  const vh2=vh*.72,v2y=-vyb*.72,d2=Math.hypot(xc-xb,.3-zb),T2=d2/vh2;
  const now=performance.now(),tl=now+900,tb=tl+T1*1000,tc=tb+T2*1000;
- feed={fh,mph,start,xb,zb,xc,vh,vh2,vy0,v2y,T1,T2,tl,tb,tc,done:false,swung:false,res:null,sounded:false,wide,s0:steps};PAN=clamp(xc/1.25,-1,1)*.85;speak((fh>0?'Forehand':'Backhand')+(wide?', wide':''));window.__feed=feed;
+ feed={fh,mph,start,xb,zb,xc,vh,vh2,vy0,v2y,T1,T2,tl,tb,tc,done:false,swung:false,res:null,sounded:false,wide,s0:steps};PAN=clamp(xc/1.25,-1,1)*.85;const dirW=xc>0?'right':'left',stroke=fh>0?'Forehand':'Backhand';speak(wide&&mode==='motion'?`Step ${dirW}! ${stroke}`:`${stroke}, on your ${dirW}`);window.__feed=feed;
  state='windup';stats.balls++;machineLight.material.color.set(0xd7f23a);
  sfx.bounce((tb-now)/1000);
  const gap=Math.min(.38,(tc-tl)/3000);
  [[2,'3'],[1,'2'],[0,'HIT!']].forEach(([k,txt])=>{const at=tc-k*gap*1000;tone(k?880:1560,k?.07:.13,k?.28:.5,(at-now)/1000,k?'sine':'square');
   setTimeout(()=>{if(feed&&!feed.done||!k){const c=$('#cue');c.textContent=txt;c.style.fontSize=k?'34px':'52px';c.style.transition='none';c.style.opacity=1;requestAnimationFrame(()=>{c.style.transition='opacity .3s';c.style.opacity=0})}},Math.max(0,at-now))});
- PAN=0;showBoard((fh>0?'Forehand':'Backhand')+(wide?', wide!':''),`${Math.round(mph)} mph${wide&&mode==='motion'?' · step to it':''}`,[],1100);armMotion();
+ PAN=0;showBoard(wide&&mode==='motion'?(xc>0?'Step right →':'← Step left'):(xc<0?'← ':'')+(fh>0?'Forehand':'Backhand')+(xc>0?' →':''),wide&&mode==='motion'?(fh>0?'Forehand':'Backhand'):`On your ${xc>0?'right':'left'} · ${Math.round(mph)} mph`,[],1300);armMotion();
 }
 function feedPos(t){const f=feed;if(t<f.T1){const u=t/f.T1;return new THREE.Vector3(f.start.x+(f.xb-f.start.x)*u,f.start.y+f.vy0*t-.5*G*t*t,f.start.z+(f.zb-f.start.z)*u)}
  const t2=t-f.T1,u=t2/f.T2;return new THREE.Vector3(f.xb+(f.xc-f.xb)*u,f.v2y*t2-.5*G*t2*t2,f.zb+(.3-f.zb)*u)}
@@ -196,7 +196,7 @@ function attempt(tHit,mph,strokeFh){
  if(!feed||feed.done||feed.swung)return;feed.swung=true;anim={t0:tHit-120,dur:240,fh:feed.fh};
  const err=(tHit-feed.tc)/1000,ms=Math.round(err*1000);
  if(feed.wide&&mode==='motion'&&steps-feed.s0<1){feed.res={miss:true,ms,mph,why:"You didn't get there"};sfx.whiff();return}
- if(play==='match'&&strokeFh!=null&&strokeFh!==(feed.fh>0)){feed.res={miss:true,ms,mph,why:`Wrong stroke, that was a ${strokeFh?'forehand':'backhand'}`};sfx.whiff();return}
+ if(play==='match'&&strokeFh!=null&&strokeFh!==(feed.fh>0)){feed.res={miss:true,ms,mph,why:`Wrong stroke. That was a ${strokeFh?'forehand':'backhand'}, I called ${feed.fh>0?'forehand':'backhand'}`};sfx.whiff();return}
  contactSound(tHit);
  if(Math.abs(err)>.14){feed.res={miss:true,ms,mph};sfx.whiff();return}
  const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.115,1.4),0,1);
@@ -231,13 +231,13 @@ function finish(f){
 
 function finishMatch(f){
  f.done=true;machineLight.material.color.set(0x334400);const r=f.res,now=performance.now();let next=3600;
- if(!r||r.miss){const why=!r?'Missed it':r.why||(r.ms<0?'Too early':'Too late');showBoard(why,'Point to your opponent',[],2600);pointTo(1,why)}
+ if(!r||r.miss){const why=!r?'No swing. Swing on the last beep':r.why?(r.why.startsWith('You didn')?"You didn't get there. Step as soon as you hear the call":r.why):(r.ms<0?'Too early. Wait for the last beep':'Too late. Swing right on the last beep');showBoard(why,'Point to your opponent',[],2600);pointTo(1,why,f.wide&&mode==='motion'?'Back to the middle.':'')}
  else{let t=null;const inX=Math.abs(r.x)<=HW,inZ=r.z<NETZ&&r.z>=FAR;stats.top=Math.max(stats.top,r.out);
   if(r.net!==null&&r.net<.95)t='Into the net';else if(!inX&&inZ)t='Wide';else if(!inZ)t=r.z<FAR?'Long':'Short';
-  if(t){showBoard(t,'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t)}
+  if(t){showBoard(t,'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t,f.wide&&mode==='motion'?'Back to the middle.':'')}
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;let ret=corner?.3:deep?.6:.82;if(r.out>85)ret*=.8;rally++;
-   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`Rally ${rally} · they got it back`,[[Math.round(r.out),'ball mph']],1500);next=1500+Math.abs(r.z)*25}
-   else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);oppX=0;pointTo(0,w)}}}
+   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`Rally ${rally} · they got it back`,[[Math.round(r.out),'ball mph']],1500);next=1700+Math.abs(r.z)*25;if(f.wide&&mode==='motion')speak('Good. Back to the middle')}
+   else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);oppX=0;pointTo(0,w,f.wide&&mode==='motion'?'Back to the middle.':'')}}}
  updHud();state='after';nextAt=now+next;
  if(matchOver){setTimeout(()=>{showBoard(games[0]>games[1]?'You win!':'Match lost',`${games[0]}–${games[1]} in games`,[],6000);setPaused(true);$('#feedBtn').textContent='New match'},1800)}
 }
@@ -249,7 +249,7 @@ function onMotion(e){const r=e.rotationRate;const rr=r&&r.alpha!=null?Math.hypot
  if(rr==null&&am==null)return;mot.live=true;
  const gi=e.accelerationIncludingGravity,now=performance.now(),s=rr!=null?rr:am*45,comp=rr!=null?[r.alpha||0,r.beta||0,r.gamma||0]:null;
  if(gi&&gi.x!=null){const m=Math.hypot(gi.x,gi.y,gi.z);stepBase=stepBase*.93+m*.07;if(m-stepBase>2.3&&now-lastStep>300&&s<200){steps++;lastStep=now;if(feed&&feed.wide&&!feed.done&&steps-feed.s0===1){PAN=clamp(feed.xc/1.25,-1,1)*.6;tone(620,.06,.18,0);PAN=0}}}
- if(calStage&&comp){if(s>700&&now-(mot.calT||0)>900){mot.calT=now;let ai=0;for(let i=1;i<3;i++)if(Math.abs(comp[i])>Math.abs(comp[ai]))ai=i;
+ if(calStage&&comp&&mode==='motion'){if(s>700&&now-(mot.calT||0)>900){mot.calT=now;let ai=0;for(let i=1;i<3;i++)if(Math.abs(comp[i])>Math.abs(comp[ai]))ai=i;
    if(calStage===1){mot.calA=[ai,Math.sign(comp[ai])];calStage=2;tone(990,.08,.3,0);speak('Got it. Now swing a backhand');showBoard('Now a backhand','Swing one backhand',[],4000)}
    else{const[a0,s0]=mot.calA;cal=a0===ai&&Math.sign(comp[ai])!==s0?{axis:a0,fh:s0}:null;calStage=0;tone(990,.08,.3,0);speak(cal?"Perfect. Let's play. First to three games.":"OK. Let's play. First to three games.");showBoard("Let's play",'First to 3 games',[],2500);setTimeout(()=>setPaused(false),2200)}}return}
  if(!mot.armed||!feed||feed.swung||feed.done)return;
@@ -296,8 +296,9 @@ $('#goBtn').onclick=async()=>{ac();tone(800,.05,.05,0);
  if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Take the court';
   if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));showBoard('Swipe mode','Motion sensors are blocked here',[],2600)}}
  pad.hidden=mode!=='touch';$('#menu').hidden=true;state='ready';score=[0,0];games=[0,0];matchOver=false;rally=0;updHud();lockScreen();
- if(play==='match'&&mode==='motion'&&!cal){calStage=1;paused=true;$('#feedBtn').textContent='Pause';speak('Hold your phone like a racket. Swing one forehand.');showBoard('Swing a forehand','So I can tell your strokes apart',[],6000)}
- else{speak(play==='match'?"Let's play. First to three games.":'Ball machine on.');setTimeout(()=>setPaused(false),play==='match'?1800:200)}};
+ const intro=play==='match'?(mode==='motion'?'Welcome to the court. Stand in the middle of a clear space, with room to step left and right. Hold your phone like a racket. I will call every ball: forehand or backhand, and which side. When I say step, take a step that way. Then hit it on the last beep.':'Welcome to the court. I will call every ball and which side it is on. Swipe on the last beep.'):'';
+ if(play==='match'&&mode==='motion'&&!cal){calStage=0;paused=true;$('#feedBtn').textContent='Pause';speak(intro);speak('First, swing one forehand.',true);setTimeout(()=>{calStage=1},9000);showBoard('Listen to the coach','Then swing one forehand',[],11000)}
+ else{if(intro)speak(intro);speak(play==='match'?"Let's play. First to three games.":'Ball machine on.',!!intro);setTimeout(()=>setPaused(false),play==='match'?(intro?9500:1800):200)}};
 let wake=null;async function lockScreen(){try{wake=await navigator.wakeLock.request('screen')}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&wake)lockScreen()});
 if(typeof THREE!=='undefined'){try{init()}catch(e){$('.note').textContent='3D could not start: '+e.message}}else $('.note').textContent='The 3D engine did not load. Check your connection and reload.';
