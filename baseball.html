@@ -108,8 +108,8 @@ segInit('#spdSeg',speed,v=>speed=+v);segInit('#mixSeg',mix,v=>mix=+v);segInit('#
 let AC=null;
 const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
 function tone(f,dur,vol,at,type){const a=ac();if(!a)return;const t=a.currentTime+Math.max(0,at||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02)}
-function noise(dur,freq,type,vol){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(a.destination);s.start()}
-const sfx={crack(){noise(.12,2600,'bandpass',1.6);tone(180,.12,.5,0,'triangle')},whiff(){noise(.25,900,'bandpass',.4)},thud(){noise(.15,300,'lowpass',.8)},launch(){noise(.18,500,'lowpass',.7);tone(90,.15,.3,0,'sawtooth')},whirr(){tone(140,.8,.07,0,'sawtooth')}};
+function noise(dur,freq,type,vol,at){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(a.destination);s.start(a.currentTime+Math.max(0,at||0))}
+const sfx={crack(at){noise(.12,2600,'bandpass',1.6,at);tone(180,.12,.5,at||0,'triangle')},whiff(){noise(.25,900,'bandpass',.4)},thud(){noise(.15,300,'lowpass',.8)},launch(){noise(.18,500,'lowpass',.7);tone(90,.15,.3,0,'sawtooth')},whirr(){tone(140,.8,.07,0,'sawtooth')}};
 const buzz=ms=>{try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}};
 
 // ---------- scene ----------
@@ -174,8 +174,9 @@ function newPitch(){
 const pitchPos=t=>{const p=pitch,g=-G;return new THREE.Vector3(p.start.x+p.v0.x*t,p.start.y+p.v0.y*t+.5*g*t*t,p.start.z+p.v0.z*t)};
 function project(ev,la,spray){let v=ev*.44704,a=la*DEG,vx=v*Math.cos(a),vy=v*Math.sin(a),x=0,y=.9,dt=.005;while(y>0&&x<250){const s=Math.hypot(vx,vy);vx-=K*s*vx*dt;vy-=(G+K*s*vy)*dt;x+=vx*dt;y+=vy*dt}return x*3.281}
 
+function contactSound(tHit){if(!pitch||pitch.done||pitch.sounded)return;const err=(tHit-pitch.tc)/1000;if(Math.abs(err)>.15)return;pitch.sounded=true;const d=Math.max(0,Math.max(tHit,pitch.tc)-performance.now());sfx.crack(d/1000);setTimeout(()=>buzz(40),d)}
 function attempt(tHit,mph){
- if(!pitch||pitch.done||pitch.swung)return;
+ if(!pitch||pitch.done||pitch.swung)return;contactSound(tHit);
  pitch.swung=true;startBatAnim(tHit);
  const err=(tHit-pitch.tc)/1000,ms=Math.round(err*1000);
  if(Math.abs(err)>.15){pitch.res={miss:true,mph,ms};sfx.whiff();return}
@@ -183,7 +184,7 @@ function attempt(tHit,mph){
  const r=Math.random();let la;
  if(q>.8)la=rand(12,32);else if(q>.5)la=r<.5?rand(0,12):rand(32,48);else la=r<.55?rand(-12,4):rand(48,72);
  const spray=clamp(-err/.15*50+rand(-6,6),-80,80);
- const ev=clamp((.2*pitch.mph+1.15*mph)*(.5+.5*q),20,122);
+ const ev=clamp((.2*pitch.mph+1.2*mph)*(.5+.5*q),20,122);
  const dist=project(ev,la,spray);
  pitch.res={miss:false,mph,ms,q,la,spray,ev,dist};
  const wait=Math.max(0,pitch.tc-performance.now());
@@ -192,7 +193,7 @@ function attempt(tHit,mph){
 function launchHit(p){
  if(p!==pitch||p.done)return;const r=p.res,v=r.ev*.44704,la=r.la*DEG,sp=r.spray*DEG;
  const pos=pitchPos(p.T);hitBall={pos,vel:new THREE.Vector3(-Math.sin(sp)*Math.cos(la)*v,Math.sin(la)*v,-Math.cos(sp)*Math.cos(la)*v),t:0};
- state='hit';sfx.crack();buzz(40);
+ state='hit';if(!p.sounded){sfx.crack();buzz(40)}
  finish(p);
 }
 function outcome(r){
@@ -227,7 +228,7 @@ function onMotion(e){
  const s=rr!=null?rr:am*45,now=performance.now(),start=260,full=1600*sens,hitAt=start+.45*(full-start);
  if(!mot.active){if(s>start){mot.active=true;mot.peak=0;mot.tHit=0;mot.low=0}else return}
  mot.peak=Math.max(mot.peak,s);
- if(!mot.tHit&&s>hitAt){mot.tHit=now;const t=now;setTimeout(()=>{const mph=rr!=null?mot.peak*DEG*1.15*2.237:clamp(mot.peak/full,0,1.2)*75;mot.armed=false;attempt(t+20,clamp(mph,15,95))},80)}
+ if(!mot.tHit&&s>hitAt){mot.tHit=now;const t=now;contactSound(t+20);setTimeout(()=>{const mph=rr!=null?mot.peak*DEG*1.15*2.237:clamp(mot.peak/full,0,1.2)*75;mot.armed=false;attempt(t+20,clamp(mph,15,95))},80)}
  if(s<start*.5){mot.low=mot.low||now;if(now-mot.low>250)mot.active=false}else mot.low=0;
 }
 async function enableMotion(){
@@ -240,7 +241,7 @@ const pad=$('#pad');let sw=null;
 pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);sw={x:e.clientX,t:e.timeStamp,pts:[[e.clientX,e.timeStamp]],fired:false}});
 pad.addEventListener('pointermove',e=>{if(!sw||sw.fired)return;sw.pts.push([e.clientX,e.timeStamp]);const dx=Math.abs(e.clientX-sw.x);
  if(dx>70){sw.fired=true;const p=sw.pts;let i=p.length-1;while(i>0&&e.timeStamp-p[i][1]<70)i--;const v=Math.abs(e.clientX-p[i][0])/Math.max(e.timeStamp-p[i][1],1);
-  const mph=clamp(v*36/Math.sqrt(sens),18,92);if(pitch&&!pitch.done&&!pitch.swung)attempt(e.timeStamp,mph);else startBatAnim(performance.now())}});
+  const mph=clamp(18+v*16/Math.sqrt(sens),18,85);if(pitch&&!pitch.done&&!pitch.swung)attempt(e.timeStamp,mph);else startBatAnim(performance.now())}});
 pad.addEventListener('pointerup',()=>{sw=null});pad.addEventListener('pointercancel',()=>{sw=null});
 
 // ---------- loop ----------
