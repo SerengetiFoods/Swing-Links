@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Swing Links Batting Cage</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* VOICE: arcade batting cage, punchy and readable
+   IDEA: an indoor cage with a pitching machine and a radar board
+   PICTURE: catcher's-eye view down the netting at the machine
+   COLOUR and TYPE: dark cage navy, turf green, white ball, scoreboard amber; Archivo heavy
+   LAYOUT: HUD strip, full 3D cage, result board on top, thumb controls below */
+:root{color-scheme:dark;--bg:#10181d;--panel:#18242b;--ink:#f6f2e4;--mute:#aab8bf;--hot:#ef4b36;--amber:#ffc83d;--chip:rgba(255,255,255,.08);--line:rgba(255,255,255,.14)}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 Archivo,system-ui,sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#app{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,a.btn{font:inherit;color:inherit;background:var(--chip);border:1px solid var(--line);border-radius:12px;min-height:44px;min-width:44px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+#hud{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#hud .t{flex:1;line-height:1.15}#hud .t b{display:block;font-size:17px;font-weight:800}#hud .t span{font-size:13px;color:var(--mute)}
+.stat{text-align:center;line-height:1.1;padding:0 4px}.stat span{font-size:12px;color:var(--mute)}.stat b{display:block;font-size:17px;white-space:nowrap}
+#stage{position:relative;overflow:hidden;touch-action:none}
+#cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#board{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:min(360px,92%);background:rgba(8,14,18,.84);border:1px solid var(--line);border-radius:16px;padding:10px 14px;text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
+#board.on{opacity:1}
+#bTitle{font-size:28px;font-weight:900;line-height:1.05;color:var(--amber)}
+#bSub{font-size:14px;color:var(--mute);margin-top:2px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
+.grid div{background:rgba(255,255,255,.06);border-radius:10px;padding:5px 2px;line-height:1.1}
+.grid b{display:block;font-size:19px}.grid span{font-size:11px;color:var(--mute)}
+#cue{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);font-size:44px;font-weight:900;color:var(--amber);text-shadow:0 2px 10px rgba(0,0,0,.6);pointer-events:none;opacity:0}
+#pad{position:absolute;left:0;right:0;bottom:0;height:30%;background:linear-gradient(transparent,rgba(0,0,0,.45));display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;font-size:14px;font-weight:700;color:#dde6ea;touch-action:none}
+#pad[hidden]{display:none}
+#ctl{display:flex;gap:8px;padding:10px;background:var(--panel);border-top:1px solid var(--line)}
+#ctl button{flex:1;font-weight:800}
+#pitchBtn{background:var(--hot);border:0;font-size:19px;font-weight:900;min-height:56px;box-shadow:0 4px 0 #a52a1b;flex:2!important}
+.ov{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:max(16px,env(safe-area-inset-top)) 14px 16px;background:rgba(6,10,14,.78);backdrop-filter:blur(4px)}
+.ov[hidden]{display:none}
+.card{width:min(520px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:20px}
+h1{font-size:38px;line-height:1.05;margin:0 0 6px;font-weight:900}h1 i{color:var(--amber);font-style:normal}
+.card p{margin:0 0 14px;color:var(--mute)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;flex-wrap:wrap}.row>span{font-weight:700}
+.seg{display:flex;gap:4px;background:rgba(0,0,0,.3);padding:4px;border-radius:12px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:0 11px;font-size:15px;font-weight:700;color:var(--mute)}
+.seg button[aria-pressed=true]{background:var(--ink);color:#18242b}
+.big{width:100%;min-height:56px;background:var(--hot);border:0;font-size:20px;font-weight:900;margin-top:4px;box-shadow:0 4px 0 #a52a1b}
+.note{font-size:13px;margin-top:12px!important}
+.links{display:flex;gap:8px;margin-top:10px}.links a{flex:1}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <a class="btn" href="index.html" aria-label="Back to golf">⛳︎</a>
+    <div class="t"><b>Batting cage</b><span id="sub">Fastballs · 60 mph</span></div>
+    <div class="stat"><span>Hits</span><b id="sHits">0/0</b></div>
+    <div class="stat"><span>Best EV</span><b id="sEV">–</b></div>
+    <div class="stat"><span>Longest</span><b id="sDist">–</b></div>
+  </header>
+  <main id="stage">
+    <canvas id="cv"></canvas>
+    <div id="board"><div id="bTitle">Ready</div><div id="bSub"></div><div class="grid" id="bGrid"></div></div>
+    <div id="cue">BEEP</div>
+    <div id="pad" hidden>Swipe sideways across here to swing</div>
+  </main>
+  <footer id="ctl">
+    <button id="setBtn">Settings</button>
+    <button id="pitchBtn">Start pitching</button>
+  </footer>
+</div>
+
+<section id="menu" class="ov">
+  <div class="card">
+    <h1>Batting <i>Cage</i></h1>
+    <p>The machine fires, and you'll hear a beep just before the ball reaches the plate. Swing on the beep. Speed and timing decide how far it goes.</p>
+    <div class="row"><span>Pitch speed</span><div class="seg" id="spdSeg"><button data-v="45">45</button><button data-v="60">60</button><button data-v="75">75</button><button data-v="90">90 mph</button></div></div>
+    <div class="row"><span>Pitches</span><div class="seg" id="mixSeg"><button data-v="0">Fastballs</button><button data-v="1">Mix in changeups</button></div></div>
+    <div class="row"><span>Beep comes</span><div class="seg" id="leadSeg"><button data-v="0.6">Early</button><button data-v="0.45">Normal</button><button data-v="0.3">Late</button></div></div>
+    <div class="row"><span>Swing with</span><div class="seg" id="modeSeg"><button data-v="motion">Phone motion</button><button data-v="touch">Swipe</button></div></div>
+    <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
+    <button id="goBtn" class="big">Step in</button>
+    <p class="note">Phone motion: hold your phone with both hands like a bat handle, screen facing you, and swing level. The cage reads your bat speed from the phone's sensors. Swipe: flick fast sideways across the bottom of the screen. A faster flick means more bat speed.</p>
+    <div class="links"><a class="btn" href="index.html">Back to golf</a></div>
+  </div>
+</section>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const cv=$('#cv');let W=1,H=1;
+const ro=new ResizeObserver(()=>{const r=cv.getBoundingClientRect();W=Math.max(r.width,1);H=Math.max(r.height,1)});ro.observe(cv);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),DEG=Math.PI/180,rand=(a,b)=>a+Math.random()*(b-a);
+let speed=60,mix=0,lead=.45,mode='motion',sens=1;
+try{const st=JSON.parse(localStorage.getItem('swingcage')||'{}');if(st.speed)speed=+st.speed;if(st.mix!=null)mix=+st.mix;if(st.lead)lead=+st.lead;if(st.mode)mode=st.mode;if(st.sens)sens=+st.sens}catch(e){}
+const save=()=>{try{localStorage.setItem('swingcage',JSON.stringify({speed,mix,lead,mode,sens}))}catch(e){}};
+function segInit(id,val,set){const s=$(id),upd=v=>s.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===String(v)));upd(val);s.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);upd(b.dataset.v);save()})}
+segInit('#spdSeg',speed,v=>speed=+v);segInit('#mixSeg',mix,v=>mix=+v);segInit('#leadSeg',lead,v=>lead=+v);segInit('#modeSeg',mode,v=>mode=v);segInit('#sensSeg',sens,v=>sens=+v);
+
+// ---------- audio ----------
+let AC=null;
+const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
+function tone(f,dur,vol,at,type){const a=ac();if(!a)return;const t=a.currentTime+Math.max(0,at||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02)}
+function noise(dur,freq,type,vol){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(a.destination);s.start()}
+const sfx={crack(){noise(.12,2600,'bandpass',1.6);tone(180,.12,.5,0,'triangle')},whiff(){noise(.25,900,'bandpass',.4)},thud(){noise(.15,300,'lowpass',.8)},launch(){noise(.18,500,'lowpass',.7);tone(90,.15,.3,0,'sawtooth')},whirr(){tone(140,.8,.07,0,'sawtooth')}};
+const buzz=ms=>{try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}};
+
+// ---------- scene ----------
+const GL=typeof THREE!=='undefined';
+let renderer,scene,cam,ball,bat,batPivot,light,zone;
+const ZT=-17.6;
+function init(){
+ renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x141c22);scene.fog=new THREE.Fog(0x141c22,18,40);
+ cam=new THREE.PerspectiveCamera(48,1,.02,200);
+ scene.add(new THREE.HemisphereLight(0xdfe9ff,0x24301f,.75));
+ const d=new THREE.DirectionalLight(0xffffff,.55);d.position.set(2,8,4);scene.add(d);
+ const turf=new THREE.Mesh(new THREE.PlaneGeometry(5,28),new THREE.MeshLambertMaterial({color:0x2f7d3a}));turf.rotation.x=-Math.PI/2;turf.position.z=-9;scene.add(turf);
+ const dirt=new THREE.Mesh(new THREE.CircleGeometry(1.6,40),new THREE.MeshLambertMaterial({color:0x9a6a40}));dirt.rotation.x=-Math.PI/2;dirt.position.set(0,.003,.1);scene.add(dirt);
+ const mound=new THREE.Mesh(new THREE.CircleGeometry(1.4,40),new THREE.MeshLambertMaterial({color:0x9a6a40}));mound.rotation.x=-Math.PI/2;mound.position.set(0,.003,ZT-.6);scene.add(mound);
+ const ps=new THREE.Shape();ps.moveTo(-.216,0);ps.lineTo(.216,0);ps.lineTo(.216,.216);ps.lineTo(0,.432);ps.lineTo(-.216,.216);ps.closePath();
+ const plate=new THREE.Mesh(new THREE.ShapeGeometry(ps),new THREE.MeshLambertMaterial({color:0xffffff}));plate.rotation.x=-Math.PI/2;plate.position.set(0,.006,-.2);scene.add(plate);
+ for(const sx of[-1,1]){const bx=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1.2,1.8)),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.6}));bx.rotation.x=-Math.PI/2;bx.position.set(sx*.95,.008,.05);scene.add(bx)}
+ const nc=document.createElement('canvas');nc.width=nc.height=64;const ng=nc.getContext('2d');ng.strokeStyle='rgba(30,36,40,.95)';ng.lineWidth=3;ng.strokeRect(0,0,64,64);
+ const nt=new THREE.CanvasTexture(nc);nt.wrapS=nt.wrapT=THREE.RepeatWrapping;nt.repeat.set(30,6);
+ const net=new THREE.Mesh(new THREE.BoxGeometry(4.6,3.9,26.5),new THREE.MeshBasicMaterial({map:nt,transparent:true,side:THREE.BackSide,depthWrite:false}));net.position.set(0,1.93,-9.6);scene.add(net);
+ const back=new THREE.Mesh(new THREE.PlaneGeometry(4.6,3.9),new THREE.MeshLambertMaterial({color:0x1f2a31}));back.position.set(0,1.95,-22.8);scene.add(back);
+ const mg=new THREE.Group();mg.position.set(0,0,ZT-.35);scene.add(mg);
+ const gm=c=>new THREE.MeshPhongMaterial({color:c,shininess:30});
+ for(const a of[0,2.1,4.2]){const l=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,1.5,6),gm(0x777f86));l.position.set(Math.sin(a)*.35,.7,Math.cos(a)*.35);l.rotation.set(Math.cos(a)*.25,0,-Math.sin(a)*.25);mg.add(l)}
+ const body=new THREE.Mesh(new THREE.BoxGeometry(.7,.45,.5),gm(0x2b6fd6));body.position.y=1.55;mg.add(body);
+ for(const sx of[-1,1]){const w=new THREE.Mesh(new THREE.CylinderGeometry(.22,.22,.1,24),gm(0x222222));w.rotation.z=Math.PI/2;w.position.set(sx*.14,1.75,.22);mg.add(w)}
+ light=new THREE.Mesh(new THREE.SphereGeometry(.07,12,10),new THREE.MeshBasicMaterial({color:0x553300}));light.position.set(.28,1.85,.1);mg.add(light);
+ const zp=[[-.22,.5],[.22,.5],[.22,1.07],[-.22,1.07],[-.22,.5]].map(p=>new THREE.Vector3(p[0],p[1],0));
+ zone=new THREE.Line(new THREE.BufferGeometry().setFromPoints(zp),new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.35}));scene.add(zone);
+ ball=new THREE.Mesh(new THREE.SphereGeometry(.037,16,12),new THREE.MeshPhongMaterial({color:0xffffff,emissive:0x555555}));ball.visible=false;scene.add(ball);
+ batPivot=new THREE.Group();batPivot.position.set(-.5,.95,.25);scene.add(batPivot);
+ bat=new THREE.Group();batPivot.add(bat);
+ const bm=new THREE.Mesh(new THREE.CylinderGeometry(.034,.014,.86,14),new THREE.MeshPhongMaterial({color:0xc9935a,shininess:60}));bm.rotation.z=-Math.PI/2;bm.position.x=.43;bat.add(bm);
+ const knob=new THREE.Mesh(new THREE.SphereGeometry(.02,10,8),new THREE.MeshPhongMaterial({color:0x222222}));bat.add(knob);
+ setBat(0);
+}
+function setBat(u){const th=-1.9+4.2*u,tilt=u<.5?1.05-.95*(u*2):.1+.8*((u-.5)*2);batPivot.rotation.set(0,th,0);bat.rotation.set(0,0,tilt)}
+
+// ---------- game state ----------
+const G=9.81,K=.004;
+let state='menu',pitch=null,nextAt=0,paused=true,batAnim=null,hitBall=null;
+const stats={pitches:0,hits:0,bestEV:0,bestD:0};
+const board=$('#board');let boardT;
+function showBoard(title,sub,cells,ms){$('#bTitle').textContent=title;$('#bSub').textContent=sub||'';$('#bGrid').innerHTML=(cells||[]).map(c=>`<div><b>${c[0]}</b><span>${c[1]}</span></div>`).join('');$('#bGrid').style.display=cells&&cells.length?'grid':'none';board.classList.add('on');clearTimeout(boardT);if(ms)boardT=setTimeout(()=>board.classList.remove('on'),ms)}
+function updHud(){$('#sub').textContent=`${mix?'Mixed':'Fastballs'} · ${speed} mph`;$('#sHits').textContent=`${stats.hits}/${stats.pitches}`;$('#sEV').textContent=stats.bestEV?Math.round(stats.bestEV)+' mph':'–';$('#sDist').textContent=stats.bestD?Math.round(stats.bestD)+' ft':'–'}
+
+function newPitch(){
+ const change=mix&&Math.random()<.35,mph=speed*(change?.8:rand(.97,1.03)),v=mph*.44704;
+ const start=new THREE.Vector3(rand(-.03,.03),1.78,ZT+.4),target=new THREE.Vector3(rand(-.17,.17),rand(.62,.98),0);
+ const T=(target.z-start.z)/v,v0=new THREE.Vector3((target.x-start.x)/T,(target.y-start.y+.5*G*T*T)/T,v);
+ const now=performance.now(),tl=now+1000,tc=tl+T*1000;
+ pitch={mph,change,start,v0,T,tl,tc,swung:false,done:false,res:null};
+ state='windup';stats.pitches++;updHud();
+ light.material.color.set(0xffb000);sfx.whirr();
+ const beepAt=tc-lead*1000;
+ const a=ac();if(a)tone(1250,.09,.35,(beepAt-now)/1000,'square');
+ setTimeout(()=>{if(pitch&&!pitch.done&&state!=='menu'){const c=$('#cue');c.style.transition='none';c.style.opacity=1;requestAnimationFrame(()=>{c.style.transition='opacity .35s';c.style.opacity=0})}},Math.max(0,beepAt-now));
+ showBoard(change?'Changeup':'Fastball',`${Math.round(mph)} mph`,[],1100);
+ armMotion();
+}
+const pitchPos=t=>{const p=pitch,g=-G;return new THREE.Vector3(p.start.x+p.v0.x*t,p.start.y+p.v0.y*t+.5*g*t*t,p.start.z+p.v0.z*t)};
+function project(ev,la,spray){let v=ev*.44704,a=la*DEG,vx=v*Math.cos(a),vy=v*Math.sin(a),x=0,y=.9,dt=.005;while(y>0&&x<250){const s=Math.hypot(vx,vy);vx-=K*s*vx*dt;vy-=(G+K*s*vy)*dt;x+=vx*dt;y+=vy*dt}return x*3.281}
+
+function attempt(tHit,mph){
+ if(!pitch||pitch.done||pitch.swung)return;
+ pitch.swung=true;startBatAnim(tHit);
+ const err=(tHit-pitch.tc)/1000,ms=Math.round(err*1000);
+ if(Math.abs(err)>.15){pitch.res={miss:true,mph,ms};sfx.whiff();return}
+ const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.125,1.4),0,1);
+ const r=Math.random();let la;
+ if(q>.8)la=rand(12,32);else if(q>.5)la=r<.5?rand(0,12):rand(32,48);else la=r<.55?rand(-12,4):rand(48,72);
+ const spray=clamp(-err/.15*50+rand(-6,6),-80,80);
+ const ev=clamp((.2*pitch.mph+1.15*mph)*(.5+.5*q),20,122);
+ const dist=project(ev,la,spray);
+ pitch.res={miss:false,mph,ms,q,la,spray,ev,dist};
+ const wait=Math.max(0,pitch.tc-performance.now());
+ setTimeout(()=>launchHit(pitch),wait);
+}
+function launchHit(p){
+ if(p!==pitch||p.done)return;const r=p.res,v=r.ev*.44704,la=r.la*DEG,sp=r.spray*DEG;
+ const pos=pitchPos(p.T);hitBall={pos,vel:new THREE.Vector3(-Math.sin(sp)*Math.cos(la)*v,Math.sin(la)*v,-Math.cos(sp)*Math.cos(la)*v),t:0};
+ state='hit';sfx.crack();buzz(40);
+ finish(p);
+}
+function outcome(r){
+ if(Math.abs(r.spray)>45)return'Foul ball';
+ if(r.la<10)return r.ev>95?'Hard grounder':'Ground ball';
+ if(r.la>50)return'Pop up';
+ if(r.dist>=370)return'HOME RUN!';
+ if(r.la<=24&&r.ev>=85)return'Line drive';
+ if(r.dist>=300)return'Deep fly ball';
+ return r.la<=24?'Line drive':'Fly ball';
+}
+function timingTxt(ms){const a=Math.abs(ms);return a<=25?'Perfect timing':`${a} ms ${ms<0?'early':'late'}`}
+function finish(p){
+ if(p.done)return;p.done=true;light.material.color.set(0x553300);
+ const r=p.res;
+ if(!r){showBoard('Strike','Taken. Swing on the beep!',[],2200)}
+ else if(r.miss){showBoard('Swing and a miss',`${Math.abs(r.ms)>400?'Way':''} ${Math.abs(r.ms)} ms ${r.ms<0?'early':'late'}`.trim(),[[Math.round(r.mph),'bat mph']],2400)}
+ else{const o=outcome(r),fair=Math.abs(r.spray)<=45;if(fair&&r.la>=-5)stats.hits++;stats.bestEV=Math.max(stats.bestEV,r.ev);if(fair)stats.bestD=Math.max(stats.bestD,r.dist);
+  showBoard(o,timingTxt(r.ms)+(fair?` · to ${r.spray>12?'left':r.spray<-12?'right':'center'} field`:''),[[Math.round(r.mph),'bat mph'],[Math.round(r.ev),'exit mph'],[Math.round(r.la)+'°','launch'],[fair?Math.round(r.dist):'–','feet']],3200);
+  if(o==='HOME RUN!'){tone(660,.15,.3,0);tone(880,.15,.3,.15);tone(1100,.3,.3,.3)}}
+ updHud();state='after';nextAt=performance.now()+(r&&!r.miss?3600:2800);
+}
+function startBatAnim(t){batAnim={t0:t-110,dur:220}}
+
+// ---------- input: motion ----------
+const mot={listening:false,live:false,armed:false,active:false,peak:0,tHit:0,low:0};
+function armMotion(){mot.armed=mode==='motion';mot.active=false;mot.tHit=0}
+function onMotion(e){
+ const r=e.rotationRate;let rr=r&&r.alpha!=null?Math.hypot(r.alpha||0,r.beta||0,r.gamma||0):null;
+ const a=e.acceleration;let am=a&&a.x!=null?Math.hypot(a.x,a.y,a.z):null;
+ if(rr==null&&am==null)return;mot.live=true;if(!mot.armed||!pitch||pitch.swung||pitch.done)return;
+ const s=rr!=null?rr:am*45,now=performance.now(),start=260,full=1600*sens,hitAt=start+.45*(full-start);
+ if(!mot.active){if(s>start){mot.active=true;mot.peak=0;mot.tHit=0;mot.low=0}else return}
+ mot.peak=Math.max(mot.peak,s);
+ if(!mot.tHit&&s>hitAt){mot.tHit=now;const t=now;setTimeout(()=>{const mph=rr!=null?mot.peak*DEG*1.15*2.237:clamp(mot.peak/full,0,1.2)*75;mot.armed=false;attempt(t+20,clamp(mph,15,95))},80)}
+ if(s<start*.5){mot.low=mot.low||now;if(now-mot.low>250)mot.active=false}else mot.low=0;
+}
+async function enableMotion(){
+ try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')return false}}catch(e){return false}
+ if(!mot.listening){addEventListener('devicemotion',onMotion);mot.listening=true}
+ await new Promise(r=>setTimeout(r,900));return mot.live;
+}
+// ---------- input: swipe ----------
+const pad=$('#pad');let sw=null;
+pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);sw={x:e.clientX,t:e.timeStamp,pts:[[e.clientX,e.timeStamp]],fired:false}});
+pad.addEventListener('pointermove',e=>{if(!sw||sw.fired)return;sw.pts.push([e.clientX,e.timeStamp]);const dx=Math.abs(e.clientX-sw.x);
+ if(dx>70){sw.fired=true;const p=sw.pts;let i=p.length-1;while(i>0&&e.timeStamp-p[i][1]<70)i--;const v=Math.abs(e.clientX-p[i][0])/Math.max(e.timeStamp-p[i][1],1);
+  const mph=clamp(v*36/Math.sqrt(sens),18,92);if(pitch&&!pitch.done&&!pitch.swung)attempt(e.timeStamp,mph);else startBatAnim(performance.now())}});
+pad.addEventListener('pointerup',()=>{sw=null});pad.addEventListener('pointercancel',()=>{sw=null});
+
+// ---------- loop ----------
+let last=performance.now(),sizeKey='',shift=0;
+function loop(now){
+ const dt=Math.min((now-last)/1000,.05);last=now;
+ if(renderer){
+  if(sizeKey!==W+'x'+H){sizeKey=W+'x'+H;renderer.setSize(W,H,false);cam.aspect=W/H;cam.updateProjectionMatrix()}
+  const want=pad.hidden?0:pad.offsetHeight*.45;shift+=(want-shift)*Math.min(1,dt*6);if(shift>.5)cam.setViewOffset(W,H,0,shift,W,H);else cam.clearViewOffset();
+  cam.position.set(.12,1.32,2.35);cam.lookAt(0,1.0,ZT);
+  if(pitch&&state!=='hit'&&state!=='menu'&&!hitBall){
+   const t=(now-pitch.tl)/1000;
+   if(t>=0){if(state==='windup'){state='flight';sfx.launch();light.material.color.set(0xff3b1f)}
+    const p=pitchPos(t);ball.visible=true;ball.position.copy(p);
+    if(p.z>2.2&&!pitch.done){if(!pitch.res||pitch.res.miss){sfx.thud();finish(pitch)}}
+    if(p.z>2.6)ball.visible=false}
+   else ball.visible=false;
+  }
+  if(state==='hit'||(state==='after'&&hitBall)){const h=hitBall;if(h){h.t+=dt;const n=4;for(let i=0;i<n;i++){const st=dt/n,sp=h.vel.length();h.vel.x-=K*sp*h.vel.x*st;h.vel.z-=K*sp*h.vel.z*st;h.vel.y-=(G+K*sp*h.vel.y)*st;h.pos.addScaledVector(h.vel,st);
+     if(h.pos.y<.037){h.pos.y=.037;h.vel.y=Math.abs(h.vel.y)*.35;h.vel.x*=.75;h.vel.z*=.75}
+     if(Math.abs(h.pos.x)>2.2){h.pos.x=Math.sign(h.pos.x)*2.2;h.vel.x*=-.1;h.vel.z*=.3}
+     if(h.pos.y>3.8){h.pos.y=3.8;h.vel.y*=-.1;h.vel.z*=.4}
+     if(h.pos.z<-22.6){h.pos.z=-22.6;h.vel.z*=-.08}
+     if(h.pos.z>3.2){h.pos.z=3.2;h.vel.z*=-.1}}
+    ball.visible=true;ball.position.copy(h.pos);if(h.t>3.2)hitBall=null}}
+  if(state==='after'&&!hitBall&&now>nextAt-600)ball.visible=false;
+  if(state==='after'&&now>nextAt&&!paused){hitBall=null;newPitch()}
+  if(batAnim){const u=(now-batAnim.t0)/batAnim.dur;if(u>=1.6){batAnim=null;setBat(0)}else setBat(clamp(u,0,1))}
+  ball.scale.setScalar(1+cam.position.distanceTo(ball.position)*.05);
+  renderer.render(scene,cam);
+ }
+ requestAnimationFrame(loop);
+}
+
+// ---------- controls ----------
+function setPaused(p){paused=p;$('#pitchBtn').textContent=p?'Start pitching':'Pause';if(!p&&(state==='idle'||state==='after'||state==='ready')){nextAt=performance.now()+800;state='after'}}
+$('#pitchBtn').onclick=()=>{ac();setPaused(!paused)};
+$('#setBtn').onclick=()=>{setPaused(true);$('#menu').hidden=false};
+$('#goBtn').onclick=async()=>{ac();tone(800,.05,.05,0);
+ if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Step in';
+  if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));showBoard('Swipe mode','Motion sensors are blocked here',[],2600)}}
+ pad.hidden=mode!=='touch';$('#menu').hidden=true;state='ready';updHud();setPaused(false);
+ if(mode==='motion')showBoard('Grip it like a bat',"Pitches start in a moment. Swing on the beep",[],2400);
+};
+if(GL){try{init()}catch(e){$('.note').textContent='3D could not start on this device: '+e.message}}else $('.note').textContent='The 3D engine did not load. Check your connection and reload.';
+updHud();requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>
