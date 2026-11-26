@@ -197,7 +197,7 @@ function newFeed(quick){
 }
 function feedPos(t){const f=feed;if(t<f.T1){const u=t/f.T1;return new THREE.Vector3(f.start.x+(f.xb-f.start.x)*u,f.start.y+f.vy0*t-.5*G*t*t,f.start.z+(f.zb-f.start.z)*u)}
  const t2=t-f.T1,u=t2/f.T2;return new THREE.Vector3(f.xb+(f.xc-f.xb)*u,f.v2y*t2-.5*G*t2*t2,f.zb+(.3-f.zb)*u)}
-function simShot(v,la,dir,top,y0){let x=0,y=y0||1,z=0,vx=Math.sin(dir)*Math.cos(la)*v,vy=Math.sin(la)*v,vz=-Math.cos(dir)*Math.cos(la)*v,net=null,dt=.004;
+function simShot(v,la,dir,top,y0,x0){let x=x0||0,y=y0||1,z=0,vx=Math.sin(dir)*Math.cos(la)*v,vy=Math.sin(la)*v,vz=-Math.cos(dir)*Math.cos(la)*v,net=null,dt=.004;
  while(y>0&&z>-40){const s=Math.hypot(vx,vy,vz);vx-=KD*s*vx*dt;vz-=KD*s*vz*dt;vy-=(G+top+KD*s*vy)*dt;const pz=z;x+=vx*dt;y+=vy*dt;z+=vz*dt;if(net===null&&pz>NETZ&&z<=NETZ)net=y}
  return{x,z,net}}
 function contactSound(t){if(!feed||feed.done||feed.sounded)return;const err=(t-feed.tc)/1000;if(Math.abs(err)>.14)return;if(feed.wide&&mode==='motion'&&steps-feed.s0<1)return;feed.sounded=true;const d=Math.max(0,Math.max(t,feed.tc)-performance.now());PAN=clamp(feed.xc/1.25,-1,1)*.6;sfx.pop(d/1000);PAN=0;setTimeout(()=>buzz(30),d)}
@@ -210,16 +210,16 @@ function attempt(tHit,mph,strokeFh,face){face=face||0;
  if(Math.abs(err)>.14){feed.res={miss:true,ms,mph};sfx.whiff();return}
  const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.115,1.4),0,1);
  const pull=feed.fh*HS();
- const dir=clamp((-err/.14)*16*pull+rand(-3,3),-28,28)*DEG*1;
+ const xcon=feed.xc,base=Math.atan2(-xcon,23.5)/DEG,dir=clamp(base+(err/.14)*15*pull+rand(-2.5,2.5),-30,30)*DEG;
  const kind=face>45?'overcooked':face>14?'topspin':face<-45?'wide open':face<-14?'slice':'flat';
  const out=clamp((.3*feed.mph+1.05*mph)*(.55+.45*q)*(kind==='slice'||kind==='wide open'?.82:kind==='flat'?1:.92),15,120);
  const top=(q>.6?4:2)+clamp(face,-40,60)*.25,v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
  const y0=clamp(feedPos(feed.T1+feed.T2).y,.35,1.5);
- for(let i=0;i<16;i++){const m=(lo+hi)/2;if(simShot(v,m*DEG,dir,top,y0).z>zt)lo=m;else hi=m}
- let laD=(lo+hi)/2;for(let i=0;i<20&&(simShot(v,laD*DEG,dir,top,y0).net||0)<1.08;i++)laD+=.5;
+ for(let i=0;i<16;i++){const m=(lo+hi)/2;if(simShot(v,m*DEG,dir,top,y0,xcon).z>zt)lo=m;else hi=m}
+ let laD=(lo+hi)/2;for(let i=0;i<20&&(simShot(v,laD*DEG,dir,top,y0,xcon).net||0)<1.08;i++)laD+=.5;
  if(kind==='overcooked')laD-=6+(face-45)*.12;if(kind==='wide open')laD+=6+(-face-45)*.15;
  const la=(laD+(1-q)*rand(-1,1)*8)*DEG;
- const r=simShot(v,la,dir,top,y0);
+ const r=simShot(v,la,dir,top,y0,xcon);
  feed.res={miss:false,ms,mph,out,la,dir,q,top,kind,...r};
  setTimeout(()=>launchShot(feed),Math.max(0,feed.tc-performance.now()));
 }
@@ -231,24 +231,28 @@ function finish(f){
  if(!r){stats.streak=0;speak('Missed it');showBoard('Missed it','No swing. Hit on the last beep',[],2000)}
  else if(r.miss){stats.streak=0;speak(r.why||(r.ms<0?'Too early':'Too late'));showBoard(r.why||'Whiff',`${Math.abs(r.ms)} ms ${r.ms<0?'early':'late'}`,[[Math.round(r.mph),'racket mph']],2200)}
  else{let t,p=0;const inX=Math.abs(r.x)<=HW,inZ=r.z<NETZ&&r.z>=FAR;
-  if(r.net!==null&&r.net<.95){t='Into the net'}else if(!inX&&inZ){t='Wide'}else if(!inZ){t=r.z<FAR?'Long':'Short'}
+  if(!(inX&&inZ)||(r.net!==null&&r.net<.95)){t=missTxt(r)}
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;p=corner?3:deep?2:1;t=corner?'Corner winner!':deep?'Deep and in':'In'}
   if(p){stats.pts+=p;stats.streak++}else stats.streak=0;stats.top=Math.max(stats.top,r.out);
-  const where=r.dir*feed.fh*HS()<-.08?'down the line':r.dir*feed.fh*HS()>.08?'cross-court':'up the middle';
-  showBoard(t+(p?` +${p}`:''),`${kindName(r.kind)} · ${Math.abs(r.ms)<=25?'perfect timing':Math.abs(r.ms)+' ms '+(r.ms<0?'early':'late')} · ${where}`,[[Math.round(r.mph),'racket mph'],[Math.round(r.out),'ball mph'],[p?((-r.z-11.885)).toFixed(1)+' m':'–','past net']],3000);
+  const where=whereTxt(r);
+  showBoard(t+(p?` +${p}`:''),`${kindName(r.kind)} · ${Math.abs(r.ms)<=25?'perfect timing':Math.abs(r.ms)+' ms '+(r.ms<0?'early':'late')} · ${where}`,[[Math.round(r.mph),'racket mph'],[Math.round(r.out),'ball mph'],[p?Math.round((r.z-FAR)*FT)+' ft':'–','from baseline']],3000);
   if(p===3){tone(660,.15,.3,0);tone(990,.25,.3,.15)}speak(t)}
  updHud();state='after';nextAt=performance.now()+(r&&!r.miss?1900:1500);
 }
 
 const kindName=k=>({topspin:'Topspin',slice:'Slice',flat:'Flat',overcooked:'Rolled over too much','wide open':'Face too open'}[k]||'Flat');
+function whereTxt(r){const side=Math.sign(feed.xc)||1,land=r.x*side;return land<-1.2?'cross-court':land>1.2?'down the line':'up the middle'}
+const FT=3.281;
+function missTxt(r){if(r.net!==null&&r.net<.95)return'Into the net';const inZ=r.z<NETZ&&r.z>=FAR;if(Math.abs(r.x)>HW&&inZ)return`Wide by ${Math.max(1,Math.round((Math.abs(r.x)-HW)*FT))} ft`;if(r.z<FAR)return`Long by ${Math.max(1,Math.round((FAR-r.z)*FT))} ft`;return 'Short'}
+function landTxt(r){const d=Math.round((r.z-FAR)*FT),sd=Math.round((HW-Math.abs(r.x))*FT);return`${d} ft from baseline · ${sd} ft from sideline`}
 function finishMatch(f){
  f.done=true;machineLight.material.color.set(0x334400);const r=f.res,now=performance.now();let next=2700;
  if(!r||r.miss){const why=!r?'No swing':r.why?(r.why.startsWith('You didn')?'Too slow, step on the call':r.why):(r.ms<0?'Too early':'Too late');showBoard(why,'Point to your opponent',[],2600);pointTo(1,why,f.wide&&mode==='motion'?'Back to the middle.':'')}
  else{let t=null;const inX=Math.abs(r.x)<=HW,inZ=r.z<NETZ&&r.z>=FAR;stats.top=Math.max(stats.top,r.out);
-  if(r.net!==null&&r.net<.95)t='Into the net';else if(!inX&&inZ)t='Wide';else if(!inZ)t=r.z<FAR?'Long':'Short';
+  if(!(inX&&inZ)||(r.net!==null&&r.net<.95))t=missTxt(r);
   if(t){showBoard(t,r.kind==='overcooked'?'Face too closed, it dipped':r.kind==='wide open'?'Face too open, it sailed':'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t,f.wide&&mode==='motion'?'Back to the middle.':'')}
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;let ret=corner?.3:deep?.6:.82;if(r.out>85)ret*=.8;rally++;
-   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`${kindName(r.kind)} · rally ${rally}`,[[Math.round(r.out),'ball mph']],1500);next=Math.max(450,23/(r.out*.44704*.85)*1000)+120;quickNext=true;if(f.wide&&mode==='motion')speak('Back to the middle')}
+   if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`${kindName(r.kind)} · ${whereTxt(r)} · ${landTxt(r)}`,[[Math.round(r.out),'ball mph']],1500);next=Math.max(450,23/(r.out*.44704*.85)*1000)+120;quickNext=true;if(f.wide&&mode==='motion')speak('Back to the middle')}
    else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);oppX=0;pointTo(0,w,f.wide&&mode==='motion'?'Back to the middle.':'')}}}
  updHud();state='after';nextAt=now+next;
  if(matchOver){setTimeout(()=>{showBoard(games[0]>games[1]?'You win!':'Match lost',`${games[0]}–${games[1]} in games`,[],6000);setPaused(true);$('#feedBtn').textContent='New match'},1800)}
