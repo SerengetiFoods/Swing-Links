@@ -106,12 +106,12 @@ segInit('#spdSeg',speed,v=>speed=+v);segInit('#sideSeg',side,v=>side=v);segInit(
 const HS=()=>hand==='L'?-1:1;
 
 // ---------- audio ----------
-let AC=null;const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
+let AC=null;const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state!=='running')AC.resume()}catch(e){}return AC};
 let PAN=0;const outNode=a=>{if(!PAN||!a.createStereoPanner)return a.destination;const p=a.createStereoPanner();p.pan.value=PAN;p.connect(a.destination);return p};
 function speak(t,queue){const c=$('#cap');if(c){c.textContent=t;c.classList.add('on');clearTimeout(speak.t);speak.t=setTimeout(()=>c.classList.remove('on'),2600)}
- if(!voice||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.15;u.lang='en-US';window.__u=u;
+ if(!voice||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.15;u.lang='en-US';window.__u=u;u.onend=u.onerror=()=>{try{AC&&AC.state!=='running'&&AC.resume()}catch(e){}};
   if(!queue&&(speechSynthesis.speaking||speechSynthesis.pending)){speechSynthesis.cancel();setTimeout(()=>speechSynthesis.speak(u),45)}else speechSynthesis.speak(u)}catch(e){}}
-function unlockAudio(){ac();try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}try{const a=AC;if(a){const b=a.createBuffer(1,1,22050),s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start()}}catch(e){}}
+function unlockAudio(){ac();try{const a=AC;if(a){const b=a.createBuffer(1,1,22050),s=a.createBufferSource();s.buffer=b;s.connect(a.destination);s.start()}}catch(e){}}
 function tone(f,dur,vol,at,type){const a=ac();if(!a)return;const t=a.currentTime+Math.max(0,at||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(outNode(a));o.start(t);o.stop(t+dur+.02)}
 function noise(dur,freq,type,vol,at){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(outNode(a));s.start(a.currentTime+Math.max(0,at||0))}
 const sfx={pop(at){noise(.06,1500,'bandpass',1.4,at);tone(420,.06,.4,at||0,'triangle')},bounce(at){noise(.05,700,'bandpass',.6,at)},whiff(){noise(.25,900,'bandpass',.35)},launch(){noise(.12,600,'lowpass',.5)}};
@@ -186,9 +186,10 @@ function newFeed(quick){
  const now=performance.now(),tl=now+(quick?120:650),tb=tl+T1*1000,tc=tb+T2*1000;
  feed={fh,mph,start,xb,zb,xc,vh,vh2,vy0,v2y,T1,T2,tl,tb,tc,done:false,swung:false,res:null,sounded:false,wide,s0:steps};PAN=clamp(xc/1.25,-1,1)*.85;const dirW=xc>0?'right':'left',stroke=fh>0?'Forehand':'Backhand';speak(wide&&mode==='motion'?`Step ${dirW}, ${stroke.toLowerCase()}`:`${stroke}, ${dirW}`);window.__feed=feed;
  state='windup';stats.balls++;machineLight.material.color.set(0xd7f23a);
- sfx.bounce((tb-now)/1000);
+ const later=(ms,fn)=>setTimeout(()=>{ac();PAN=clamp(xc/1.25,-1,1)*.85;fn();PAN=0},Math.max(0,ms));
+ later(tb-now,()=>sfx.bounce(0));
  const gap=Math.min(.38,(tc-tl)/3000);
- [[2,'3'],[1,'2'],[0,'HIT!']].forEach(([k,txt])=>{const at=tc-k*gap*1000;tone(k?880:1560,k?.07:.13,k?.28:.5,(at-now)/1000,k?'sine':'square');
+ [[2,'3'],[1,'2'],[0,'HIT!']].forEach(([k,txt])=>{const at=tc-k*gap*1000;later(at-now-8,()=>tone(k?880:1560,k?.07:.13,k?.32:.55,0,k?'sine':'square'));
   setTimeout(()=>{if(feed&&!feed.done||!k){const c=$('#cue');c.textContent=txt;c.style.fontSize=k?'34px':'52px';c.style.transition='none';c.style.opacity=1;requestAnimationFrame(()=>{c.style.transition='opacity .3s';c.style.opacity=0})}},Math.max(0,at-now))});
  PAN=0;showBoard(wide&&mode==='motion'?(xc>0?'Step right →':'← Step left'):(xc<0?'← ':'')+(fh>0?'Forehand':'Backhand')+(xc>0?' →':''),wide&&mode==='motion'?(fh>0?'Forehand':'Backhand'):`On your ${xc>0?'right':'left'} · ${Math.round(mph)} mph`,[],1300);armMotion();
 }
