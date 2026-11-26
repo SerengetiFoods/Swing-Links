@@ -217,11 +217,11 @@ function attempt(tHit,mph,strokeFh,face){face=face||0;
  const xcon=feed.xc,base=Math.atan2(-xcon,23.5)/DEG,dir=clamp(base+(err/.14)*15*pull+rand(-2.5,2.5),-30,30)*DEG;
  const kind=face>55?'overcooked':face>18?'topspin':face<-55?'wide open':face<-18?'slice':'flat';
  const out=clamp((.25*feed.mph+1.0*mph)*(.55+.45*q)*(kind==='slice'||kind==='wide open'?.82:kind==='flat'?1:.92),15,120);
- const top=(q>.6?4:2)+clamp(face,-40,60)*.25,v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
+ const top=clamp((q>.6?4:2)+face*.14,-2,12),v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
  const y0=clamp(feedPos(feed.T1+feed.T2).y,.35,1.5);
  for(let i=0;i<16;i++){const m=(lo+hi)/2;if(simShot(v,m*DEG,dir,top,y0,xcon).z>zt)lo=m;else hi=m}
  let laD=(lo+hi)/2;for(let i=0;i<20&&(simShot(v,laD*DEG,dir,top,y0,xcon).net||0)<1.08;i++)laD+=.5;
- if(kind==='overcooked')laD-=5+(face-55)*.1;if(kind==='wide open')laD+=4+(-face-55)*.1;
+ if(kind==='overcooked')laD-=4+(face-55)*.06;if(kind==='wide open')laD+=2.5+(-face-55)*.05;
  const la=(laD+(1-q)*rand(-1,1)*3.5)*DEG;
  const r=simShot(v,la,dir,top,y0,xcon);
  feed.res={miss:false,ms,mph,out,la,dir,q,top,kind,...r};
@@ -285,7 +285,7 @@ function onMotion(e){const r=e.rotationRate;const rr=r&&r.alpha!=null?Math.hypot
  const over=now>winB+80;
  if(mot.peak>=minPk&&(s<mot.peak*.72||over)){
   const t=mot.pt,pc=mot.pComp,sfh=cal&&pc?Math.sign(pc[cal.axis])===cal.fh:null,isFh=sfh!=null?sfh:feed.fh>0;
-  const face=clamp((mot.pRoll||0)*(isFh?1:-1)*HS(),-80,80);
+  const face=clamp((mot.pRoll||0)*.6*(isFh?1:-1)*HS(),-80,80);
   const mph=rr!=null?mot.peak*DEG*.9*2.237:clamp(mot.peak/1400,0,1.2)*60;mot.armed=false;mot.peak=0;attempt(t,clamp(mph,12,90),sfh,face);return}
  if(over){mot.armed=false;mot.peak=0}}
 function endCal(msg){calStage=0;try{if(cal)localStorage.setItem('swingtenniscal',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak(msg);showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}
