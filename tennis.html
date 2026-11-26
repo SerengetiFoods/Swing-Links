@@ -84,12 +84,14 @@ h1{font-size:38px;line-height:1.05;margin:0 0 6px;font-weight:900}h1 i{color:var
     <p><b>Match:</b> play a computer opponent with real tennis scoring, and you don't need to look. A voice calls every ball, it sounds on the side it's coming to (wear headphones), and beep, beep, <b>BEEP</b> tells you when to hit. Wide balls make you take a step or two to reach them. Swing the right stroke, forehand or backhand.</p><p><b>Practice:</b> a ball machine feeds you for points: 1 in, 2 deep, 3 corner.</p>
     <div class="row"><span>Mode</span><div class="seg" id="playSeg"><button data-v="match">Match</button><button data-v="practice">Practice</button></div></div>
     <div class="row"><span>Voice calls</span><div class="seg" id="voiceSeg"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
+    <div class="row"><span>Stroke check</span><div class="seg" id="strokeSeg"><button data-v="1">On</button><button data-v="0">Off</button></div></div>
     <div class="row"><span>Ball speed</span><div class="seg" id="spdSeg"><button data-v="35">Slow</button><button data-v="50">Medium</button><button data-v="65">Fast</button></div></div>
     <div class="row"><span>Feeds</span><div class="seg" id="sideSeg"><button data-v="fh">Forehands</button><button data-v="bh">Backhands</button><button data-v="mix">Mix</button></div></div>
     <div class="row"><span>Plays</span><div class="seg" id="handSeg"><button data-v="R">Right-handed</button><button data-v="L">Left-handed</button></div></div>
     <div class="row"><span>Swing with</span><div class="seg" id="modeSeg"><button data-v="motion">Phone motion</button><button data-v="touch">Swipe</button></div></div>
     <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
     <button id="goBtn" class="big">Take the court</button>
+    <button id="relearn" style="width:100%;margin-top:8px">Re-learn my forehand and backhand</button>
     <p class="note">Phone motion: hold your phone like a racket handle and swing through. In a match, the game first asks for one forehand and one backhand so it can tell your strokes apart. Swipe: flick right to left for a forehand, left to right for a backhand (mirrored if you play left-handed). Swipe slightly upward for topspin, downward for slice. With phone motion, the tilt of your phone at contact is the racket face: roll it over for topspin, open it up for slice. Give yourself room to move and swing.</p>
   </div>
 </section>
@@ -100,13 +102,13 @@ const $=s=>document.querySelector(s);
 const cv=$('#cv');let W=1,H=1;
 const ro=new ResizeObserver(()=>{const r=cv.getBoundingClientRect();W=Math.max(r.width,1);H=Math.max(r.height,1)});ro.observe(cv);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),DEG=Math.PI/180,rand=(a,b)=>a+Math.random()*(b-a);
-let speed=50,side='mix',mode='motion',sens=1,hand='R',play='match',voice=1;
-try{const st=JSON.parse(localStorage.getItem('swingtennis')||'{}');if(st.speed)speed=+st.speed;if(st.side)side=st.side;if(st.mode)mode=st.mode;if(st.sens)sens=+st.sens;if(st.play)play=st.play;if(st.voice!=null)voice=+st.voice;hand=localStorage.getItem('swinghand')||'R'}catch(e){}
+let speed=50,side='mix',mode='motion',sens=1,hand='R',play='match',voice=1,strokeCheck=1;
+try{const st=JSON.parse(localStorage.getItem('swingtennis')||'{}');if(st.speed)speed=+st.speed;if(st.side)side=st.side;if(st.mode)mode=st.mode;if(st.sens)sens=+st.sens;if(st.play)play=st.play;if(st.voice!=null)voice=+st.voice;if(st.strokeCheck!=null)strokeCheck=+st.strokeCheck;hand=localStorage.getItem('swinghand')||'R'}catch(e){}
 try{const sh=JSON.parse(localStorage.getItem('swingshared')||'{}');if(sh.mode)mode=sh.mode;if(sh.sens)sens=+sh.sens}catch(e){}
 if(location.hash==='#practice')play='practice';if(location.hash==='#match')play='match';
-const save=()=>{try{localStorage.setItem('swingshared',JSON.stringify({mode,sens}));localStorage.setItem('swingtennis',JSON.stringify({speed,side,mode,sens,play,voice}));localStorage.setItem('swinghand',hand)}catch(e){}};
+const save=()=>{try{localStorage.setItem('swingshared',JSON.stringify({mode,sens}));localStorage.setItem('swingtennis',JSON.stringify({speed,side,mode,sens,play,voice,strokeCheck}));localStorage.setItem('swinghand',hand)}catch(e){}};
 function segInit(id,val,set){const s=$(id),upd=v=>s.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===String(v)));upd(val);s.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);upd(b.dataset.v);save()})}
-segInit('#spdSeg',speed,v=>speed=+v);segInit('#sideSeg',side,v=>side=v);segInit('#handSeg',hand,v=>hand=v);segInit('#modeSeg',mode,v=>mode=v);segInit('#sensSeg',sens,v=>sens=+v);segInit('#playSeg',play,v=>play=v);segInit('#voiceSeg',voice,v=>voice=+v);
+segInit('#spdSeg',speed,v=>speed=+v);segInit('#sideSeg',side,v=>side=v);segInit('#handSeg',hand,v=>hand=v);segInit('#modeSeg',mode,v=>mode=v);segInit('#sensSeg',sens,v=>sens=+v);segInit('#playSeg',play,v=>play=v);segInit('#voiceSeg',voice,v=>voice=+v);segInit('#strokeSeg',strokeCheck,v=>strokeCheck=+v);
 const HS=()=>hand==='L'?-1:1;
 
 // ---------- audio ----------
@@ -169,7 +171,7 @@ function setRacket(u,fh){const s=fh;racketG.position.set(.32*s*HS(),1.0,.45);con
 // ---------- state ----------
 let state='menu',feed=null,nextAt=0,paused=true,anim=null,shot=null;
 const stats={pts:0,streak:0,top:0,balls:0};
-let cal=null;try{cal=JSON.parse(localStorage.getItem('swingtenniscal2')||'null')}catch(e){}
+let cal=null;try{cal=JSON.parse(localStorage.getItem('swingtenniscal3')||'null')}catch(e){}
 let lastG=null;const rollOf=g=>g?Math.atan2(g.x,g.z)/DEG:0;const wrapD=a=>((a+540)%360)-180;
 let quickNext=false,score=[0,0],games=[0,0],rally=0,matchOver=false,steps=0,lastStep=0,stepBase=9.8,calStage=0;
 const NAMES=['love','fifteen','thirty','forty'];
@@ -209,7 +211,7 @@ function attempt(tHit,mph,strokeFh,face,aimYaw){face=face||0;
  if(!feed||feed.done||feed.swung)return;feed.swung=true;anim={t0:tHit-120,dur:240,fh:feed.fh};
  const err=(tHit-feed.tc)/1000,ms=Math.round(err*1000);
  if(feed.wide&&mode==='motion'&&steps-feed.s0<1){feed.res={miss:true,ms,mph,why:"You didn't get there"};sfx.whiff();return}
- if(play==='match'&&strokeFh!=null&&strokeFh!==(feed.fh>0)){feed.res={miss:true,ms,mph,why:`Wrong stroke, I called ${feed.fh>0?'forehand':'backhand'}`};sfx.whiff();return}
+ if(play==='match'&&strokeCheck&&strokeFh!=null&&strokeFh!==(feed.fh>0)){feed.res={miss:true,ms,mph,why:`Wrong stroke, I called ${feed.fh>0?'forehand':'backhand'}`};sfx.whiff();return}
  contactSound(tHit);
  if(Math.abs(err)>.14){feed.res={miss:true,ms,mph};sfx.whiff();return}
  const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.115,1.4),0,1);
@@ -271,26 +273,37 @@ function onMotion(e){const r=e.rotationRate;const rr=r&&r.alpha!=null?Math.hypot
  if(gi&&gi.x!=null){lastG={x:gi.x,y:gi.y,z:gi.z};const m=Math.hypot(gi.x,gi.y,gi.z);stepBase=stepBase*.93+m*.07;if(m-stepBase>2.3&&now-lastStep>300&&s<200){steps++;lastStep=now;if(feed&&feed.wide&&!feed.done&&steps-feed.s0===1){PAN=clamp(feed.xc/1.25,-1,1)*.6;tone(620,.06,.18,0);PAN=0}}}
  showLive(s);
  if(calStage&&comp&&mode==='motion'){
-  if(s>mot.cPk){mot.cPk=s;mot.cComp=comp;mot.cG=lastG;mot.cYaw=yaw}
+  (mot.cBuf=mot.cBuf||[]).push([now,comp]);if(mot.cBuf.length>60)mot.cBuf.shift();
+  if(s>mot.cPk){mot.cPk=s;mot.cComp=comp;mot.cG=lastG;mot.cYaw=yaw;mot.cT=now}
   if(mot.cPk>320*sens&&s<mot.cPk*.6&&now-(mot.calT||0)>900){mot.calT=now;const c=mot.cComp;let ai=0;for(let i=1;i<3;i++)if(Math.abs(c[i])>Math.abs(c[ai]))ai=i;mot.cPk=0;
-   if(calStage===1){mot.calA=[ai,Math.sign(c[ai])];mot.calFr=rollOf(mot.cG);mot.calFa=mot.cYaw;calStage=2;tone(990,.08,.3,0);speak('Good. Now a backhand, straight ahead');showBoard('Now a backhand','Straight at the net',[],6000)}
-   else{const[a0,s0]=mot.calA;cal=a0===ai&&Math.sign(c[ai])!==s0?{axis:a0,fh:s0,fr:mot.calFr,br:rollOf(mot.cG),fa:mot.calFa,ba:mot.cYaw}:{axis:null,fa:mot.calFa,ba:mot.cYaw};endCal(cal?"Got it. Let's play.":"Let's play.")}}
+   const cv=meanVec(mot.cBuf,mot.cT)||vnorm(c);
+   if(calStage===1){mot.calV=cv;mot.calFa=mot.cYaw;calStage=2;tone(990,.08,.3,0);speak('Good. Now a backhand, straight ahead');showBoard('Now a backhand','Straight at the net',[],6000)}
+   else{cal={vf:mot.calV,vb:cv,fa:mot.calFa,ba:mot.cYaw,sep:vdot(mot.calV,cv)};endCal(cal?"Got it. Let's play.":"Let's play.")}}
   if(s<90)mot.cPk=0;return}
  if(!mot.armed||!feed||feed.swung||feed.done)return;
  // swing = the biggest rotation peak inside the hitting window around the last beep
  const minPk=380*sens,winA=feed.tc-320,winB=feed.tc+260;
- if(now<winA){mot.peak=0;mot.roll=0;mot.lt=now;return}
+ if(now<winA){mot.peak=0;mot.roll=0;mot.lt=now;mot.buf=[];return}
+ if(comp)(mot.buf=mot.buf||[]).push([now,comp]);
  const dtm=Math.min(.05,(now-(mot.lt||now))/1000);mot.lt=now;if(s>150&&r)mot.roll=(mot.roll||0)+(r.gamma||0)*dtm;
  if(s>mot.peak){mot.peak=s;mot.pt=now;mot.pComp=comp;mot.pRoll=mot.roll||0;mot.pYaw=yaw}
  const over=now>winB+80;
  if(mot.peak>=minPk&&(s<mot.peak*.72||over)){
-  const t=mot.pt,pc=mot.pComp,sfh=cal&&cal.axis!=null&&pc?Math.sign(pc[cal.axis])===cal.fh:null,isFh=sfh!=null?sfh:feed.fh>0;
+  const t=mot.pt,pv=meanVec(mot.buf||[],t),sfh=classify(pv,feed.fh>0),isFh=sfh!=null?sfh:feed.fh>0;
   const face=clamp((mot.pRoll||0)*.6*(isFh?1:-1)*HS(),-80,80);
   const mph=rr!=null?mot.peak*DEG*.9*2.237:clamp(mot.peak/1400,0,1.2)*60;mot.armed=false;mot.peak=0;const ref=cal?(isFh?cal.fa:cal.ba):null,aim=ref!=null&&mot.pYaw!=null?wrapD(mot.pYaw-ref):null;attempt(t,clamp(mph,12,90),sfh,face,aim);return}
  if(over){mot.armed=false;mot.peak=0}}
-function endCal(msg){calStage=0;try{if(cal)localStorage.setItem('swingtenniscal2',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak(msg);showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}
+function classify(v,calledFh){if(!strokeCheck||!cal||!cal.vf||!cal.vb||!v)return null;
+ const sf=vdot(v,cal.vf),sb=vdot(v,cal.vb),mine=calledFh?sf:sb,other=calledFh?sb:sf;
+ if(cal.sep>.6)return null;
+ if(other-mine>.35)return!calledFh;
+ const k=calledFh?'vf':'vb';cal[k]=vnorm([cal[k][0]*.85+v[0]*.15,cal[k][1]*.85+v[1]*.15,cal[k][2]*.85+v[2]*.15]);try{localStorage.setItem('swingtenniscal3',JSON.stringify(cal))}catch(e){}
+ return calledFh}
+function endCal(msg){calStage=0;try{if(cal)localStorage.setItem('swingtenniscal3',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak(msg);showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}
 let liveT=0;function showLive(s){const now=performance.now();if(now-liveT<50)return;liveT=now;const el=$('#live i');if(el)el.style.width=clamp(s/(380*sens*3)*100,0,100)+'%'}
 let yaw=null;
+const vnorm=v=>{const m=Math.hypot(v[0],v[1],v[2])||1;return[v[0]/m,v[1]/m,v[2]/m]},vdot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+function meanVec(buf,t){const s=[0,0,0];let n=0;for(const[bt,c]of buf)if(Math.abs(bt-t)<=45){s[0]+=c[0];s[1]+=c[1];s[2]+=c[2];n++}return n?vnorm(s):null}
 async function enableMotion(){try{const ps=[];if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function')ps.push(DeviceMotionEvent.requestPermission());if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')ps.push(DeviceOrientationEvent.requestPermission().catch(()=>'denied'));const rs=await Promise.all(ps);if(rs.length&&rs[0]!=='granted')return false}catch(e){return false}
  if(!mot.listening){addEventListener('devicemotion',onMotion);addEventListener('deviceorientation',e=>{if(e.alpha!=null)yaw=e.alpha});mot.listening=true}await new Promise(r=>setTimeout(r,900));return mot.live}
 const pad=$('#pad');let sw=null;
@@ -325,12 +338,13 @@ function loop(now){const dt=Math.min((now-last)/1000,.05);last=now;
 function setPaused(p){if(!p)unlockAudio();if(!p&&matchOver){score=[0,0];games=[0,0];matchOver=false;rally=0;oppX=0;updHud();speak('New match. Love all.')}paused=p;$('#feedBtn').textContent=p?(play==='match'?'Resume':'Start machine'):'Pause';if(!p&&(state==='ready'||state==='after')){nextAt=performance.now()+800;state='after'}}
 $('#feedBtn').onclick=()=>{ac();if(calStage){cal=null;endCal("Let's play.");return}setPaused(!paused)};
 $('#setBtn').onclick=()=>{setPaused(true);$('#menu').hidden=false};
+$('#relearn').onclick=()=>{cal=null;try{localStorage.removeItem('swingtenniscal3')}catch(e){}$('#relearn').textContent='Will re-learn when you start';};
 $('#goBtn').onclick=async()=>{unlockAudio();tone(800,.05,.05,0);speak(play==='match'?'Stand in the middle, with room to step either way.':'Ball machine on.');
  if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Take the court';
   if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));showBoard('Swipe mode','Motion sensors are blocked here',[],2600)}}
  pad.hidden=mode!=='touch';$('#live').hidden=mode!=='motion';$('#menu').hidden=true;state='ready';score=[0,0];games=[0,0];matchOver=false;rally=0;updHud();lockScreen();
  const intro=play==='match'?(mode==='motion'?'I call each ball. Step when I say step, hit on the last beep.':'I call each ball. Swipe on the last beep.'):'';
- if(cal&&cal.fa==null&&yaw!=null)cal=null;
+ if(cal&&(!cal.vf||(cal.fa==null&&yaw!=null)))cal=null;
  if(play==='match'&&mode==='motion'&&!cal){calStage=0;paused=true;$('#feedBtn').textContent='Pause';speak(intro,true);speak('Face the net. Swing one forehand, straight ahead.',true);setTimeout(()=>{calStage=1;mot.cPk=0},3000);setTimeout(()=>{if(calStage){cal=null;endCal("Let's just play.")}},20000);showBoard('Face the net','Swing one forehand straight ahead. Tap Pause to skip',[],12000)}
  else{if(intro)speak(intro,true);setTimeout(()=>setPaused(false),play==='match'?4200:300)}};
 let wake=null;async function lockScreen(){try{wake=await navigator.wakeLock.request('screen')}catch(e){}}
