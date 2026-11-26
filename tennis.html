@@ -215,14 +215,14 @@ function attempt(tHit,mph,strokeFh,face){face=face||0;
  const q=clamp(1-Math.pow(Math.max(0,Math.abs(err)-.025)/.115,1.4),0,1);
  const pull=feed.fh*HS();
  const xcon=feed.xc,base=Math.atan2(-xcon,23.5)/DEG,dir=clamp(base+(err/.14)*15*pull+rand(-2.5,2.5),-30,30)*DEG;
- const kind=face>45?'overcooked':face>14?'topspin':face<-45?'wide open':face<-14?'slice':'flat';
+ const kind=face>55?'overcooked':face>18?'topspin':face<-55?'wide open':face<-18?'slice':'flat';
  const out=clamp((.25*feed.mph+1.0*mph)*(.55+.45*q)*(kind==='slice'||kind==='wide open'?.82:kind==='flat'?1:.92),15,120);
  const top=(q>.6?4:2)+clamp(face,-40,60)*.25,v=out*.44704,zt=rand(-16.5,-23.2);let lo=-2,hi=30;
  const y0=clamp(feedPos(feed.T1+feed.T2).y,.35,1.5);
  for(let i=0;i<16;i++){const m=(lo+hi)/2;if(simShot(v,m*DEG,dir,top,y0,xcon).z>zt)lo=m;else hi=m}
  let laD=(lo+hi)/2;for(let i=0;i<20&&(simShot(v,laD*DEG,dir,top,y0,xcon).net||0)<1.08;i++)laD+=.5;
- if(kind==='overcooked')laD-=6+(face-45)*.12;if(kind==='wide open')laD+=6+(-face-45)*.15;
- const la=(laD+(1-q)*rand(-1,1)*8)*DEG;
+ if(kind==='overcooked')laD-=5+(face-55)*.1;if(kind==='wide open')laD+=4+(-face-55)*.1;
+ const la=(laD+(1-q)*rand(-1,1)*3.5)*DEG;
  const r=simShot(v,la,dir,top,y0,xcon);
  feed.res={miss:false,ms,mph,out,la,dir,q,top,kind,...r};
  setTimeout(()=>launchShot(feed),Math.max(0,feed.tc-performance.now()));
@@ -279,12 +279,13 @@ function onMotion(e){const r=e.rotationRate;const rr=r&&r.alpha!=null?Math.hypot
  if(!mot.armed||!feed||feed.swung||feed.done)return;
  // swing = the biggest rotation peak inside the hitting window around the last beep
  const minPk=380*sens,winA=feed.tc-320,winB=feed.tc+260;
- if(now<winA){mot.peak=0;return}
- if(s>mot.peak){mot.peak=s;mot.pt=now;mot.pComp=comp;mot.pG=lastG}
+ if(now<winA){mot.peak=0;mot.roll=0;mot.lt=now;return}
+ const dtm=Math.min(.05,(now-(mot.lt||now))/1000);mot.lt=now;if(s>150&&r)mot.roll=(mot.roll||0)+(r.gamma||0)*dtm;
+ if(s>mot.peak){mot.peak=s;mot.pt=now;mot.pComp=comp;mot.pRoll=mot.roll||0}
  const over=now>winB+80;
  if(mot.peak>=minPk&&(s<mot.peak*.72||over)){
   const t=mot.pt,pc=mot.pComp,sfh=cal&&pc?Math.sign(pc[cal.axis])===cal.fh:null,isFh=sfh!=null?sfh:feed.fh>0;
-  const neutral=cal&&cal.fr!=null?(isFh?cal.fr:cal.br):mot.r0,face=mot.pG&&neutral!=null?clamp(wrapD(rollOf(mot.pG)-neutral)*(isFh?1:-1)*HS(),-80,80):0;
+  const face=clamp((mot.pRoll||0)*(isFh?1:-1)*HS(),-80,80);
   const mph=rr!=null?mot.peak*DEG*.9*2.237:clamp(mot.peak/1400,0,1.2)*60;mot.armed=false;mot.peak=0;attempt(t,clamp(mph,12,90),sfh,face);return}
  if(over){mot.armed=false;mot.peak=0}}
 function endCal(msg){calStage=0;try{if(cal)localStorage.setItem('swingtenniscal',JSON.stringify(cal))}catch(e){}tone(990,.08,.3,0);speak(msg);showBoard("Let's play",'First to 3 games',[],2000);setTimeout(()=>setPaused(false),1300)}
