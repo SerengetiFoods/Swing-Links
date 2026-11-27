@@ -134,6 +134,7 @@ th:first-child,td:first-child{text-align:left;color:var(--mute)}
     <div class="row"><span>Golfer</span><div class="seg" id="handSeg"><button data-v="R">Right-handed</button><button data-v="L">Left-handed</button></div></div>
     <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
     <button id="startBtn" class="big">Tee off</button>
+    <button id="gcalBtn" style="width:100%;margin-top:8px">Re-learn my swing speed</button>
     <p class="note" id="mNote">Phone motion: grip your phone like a club handle, screen facing you, and swing. Speed sets distance, wrist roll at impact bends it into a draw or fade. Swipe: pull down for the backswing, then flick up through the ball. A longer pull goes further, and sideways drift curves it.</p>
   </div>
 </section>
@@ -491,13 +492,20 @@ const sw=$('#sw'),pad=$('#pad'),head=$('#head');
 let tp=null,timers=[];
 const setMeter=v=>{$('#pm').style.width=clamp(v/1.15*100,0,100)+'%';$('#pmVal').textContent=Math.round(clamp(v,0,1.15)*100)+'%'};
 const padLen=()=>(CLUBS[clubI].putt?.62:.78)*pad.clientHeight*(.65+.35*sens);
+let gcal=null,gcalib=null;try{gcal=JSON.parse(localStorage.getItem('swinggolfcal')||'null')}catch(e){}
+function startGolfCal(){phase='swing';sw.hidden=false;setMeter(0);head.style.opacity=0;gcalib={peaks:[],cur:0,low:0};
+ $('#swTitle').textContent='Learn my swing';$('#swHint').textContent='Take 3 of your normal full swings, the way you would hit a driver. Not your hardest, just normal.';$('#count').textContent='0 / 3';$('#padArrow').textContent='Swing whenever you are ready';SL.say('Take three normal full swings')}
+function gcalStep(s,now){const g=gcalib;setMeter(s/1500);
+ if(s>250){g.cur=Math.max(g.cur,s);g.low=0}else if(g.cur>0){if(!g.low)g.low=now;if(now-g.low>350){if(g.cur>450){g.peaks.push(g.cur);SL.tone(990,.08,.3);buzz(30);$('#count').textContent=g.peaks.length+' / 3'}g.cur=0;g.low=0;
+  if(g.peaks.length>=3){const p=g.peaks.slice().sort((a,b)=>a-b)[1];gcal={pk:p};try{localStorage.setItem('swinggolfcal',JSON.stringify(gcal))}catch(e){}gcalib=null;closeSwing();phase='aim';toast('Got it. That swing is your normal 100 mph driver',2600);SL.say('Got it')}}}}
 function openSwing(){
+ if(mode==='motion'&&!gcal&&!CLUBS[clubI].putt){startGolfCal();return}
  phase='swing';sw.hidden=false;setMeter(0);tp=null;head.style.opacity=0;$('#count').textContent='';
  const putt=CLUBS[clubI].putt;
  if(mode==='touch'){$('#swTitle').textContent=putt?'Swipe to putt':'Swipe to swing';$('#swHint').textContent=putt?'Short pull for a short putt. Flick up smoothly and straight.':'Pull down to load the backswing, then flick straight up through the ball.';$('#padArrow').textContent='↓ pull back · flick up ↑'}
  else{$('#swTitle').textContent=putt?'Putt with your phone':'Swing your phone';$('#swHint').textContent=putt?'Hold it like a putter grip, screen facing you. Gentle pendulum stroke.':'Grip it like a club, screen facing you, both hands. Swing on "SWING!"';$('#padArrow').textContent='Keep a firm grip';countdown()}
 }
-function closeSwing(){sw.hidden=true;mot.armed=false;mot.active=false;timers.forEach(clearTimeout);timers=[]}
+function closeSwing(){gcalib=null;sw.hidden=true;mot.armed=false;mot.active=false;timers.forEach(clearTimeout);timers=[]}
 pad.addEventListener('pointerdown',e=>{if(mode!=='touch'||phase!=='swing')return;pad.setPointerCapture(e.pointerId);tp={y0:e.clientY,x0:e.clientX,max:0,ph:'back',pts:[[e.clientX,e.clientY,e.timeStamp]]};head.style.opacity=1});
 pad.addEventListener('pointermove',e=>{if(!tp)return;const y=e.clientY-tp.y0;tp.pts.push([e.clientX,e.clientY,e.timeStamp]);
  const r=pad.getBoundingClientRect();head.style.top=(e.clientY-r.top)+'px';head.style.left=(e.clientX-r.left)+'px';
@@ -519,7 +527,9 @@ function onMotion(e){
  const r=e.rotationRate;let rr=r&&r.alpha!=null?Math.hypot(r.alpha||0,r.beta||0,r.gamma||0):null;
  const a=e.acceleration;let am=a&&a.x!=null?Math.hypot(a.x,a.y,a.z):null;
  if(rr==null&&am==null){const gg=e.accelerationIncludingGravity;if(gg&&gg.x!=null)am=Math.abs(Math.hypot(gg.x,gg.y,gg.z)-9.81)}
- if(rr==null&&am==null)return;mot.live=true;if(!mot.armed)return;
+ if(rr==null&&am==null)return;mot.live=true;
+ if(gcalib){gcalStep(rr!=null?rr:am*45,performance.now());return}
+ if(!mot.armed)return;
  const s=rr!=null?rr:am*45,now=performance.now(),putt=CLUBS[clubI].putt;mot.rr=rr!=null;
  const start=putt?40:220,full=(putt?420:1500)*sens;setMeter(Math.max((s-start)/(full-start),0));
  if(!mot.active){if(s>start){Object.assign(mot,{active:true,peak:0,dPeak:0,t0:now,low:0,buf:[],axis:-1,sign:0})}else return}
@@ -538,7 +548,7 @@ function impact(pk,tp,start,full,putt){
  const power=clamp((pk-start)/(full-start),.04,1.15);
  const near=mot.buf.filter(b=>Math.abs(b[0]-tp)<60),gAvg=near.reduce((x,b)=>x+b[2],0)/(near.length||1);
  let face=clamp(gAvg/(pk*.35),-1,1)*.8*(hand==='L'?-1:1);
- const mph=mot.rr&&!putt?pk*DEG*c.r*2.237*SENSMUL():null;shoot(power,face,mph);
+ const ratio=pk/(gcal?gcal.pk:1400),eff=ratio>1?Math.min(1.22,1+(ratio-1)*.6):Math.max(.15,ratio),mph=mot.rr&&!putt?c.sp*eff*SENSMUL():null;shoot(power,face,mph);
 }
 async function enableMotion(){
  try{if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){const r=await DeviceMotionEvent.requestPermission();if(r!=='granted')return false}}catch(e){return false}
@@ -578,6 +588,7 @@ segInit('#modeSeg',mode,v=>{mode=v;save()});segInit('#sensSeg',sens,v=>{sens=+v;
 $('#courses').innerHTML=PLAYLISTS.map((p,i)=>`<button class="course" data-i="${i}" aria-pressed="${i===sel}"><canvas width="112" height="152"></canvas><div><b>${p.name}</b><span>${p.range?'Practice':p.holes.length+' holes · Par '+p.holes.reduce((a,h)=>a+h.par,0)}</span><span>${p.blurb}</span></div></button>`).join('');
 document.querySelectorAll('.course[data-i]').forEach(b=>{const i=+b.dataset.i,h=PLAYLISTS[i].holes[i===4?7:0],g=b.querySelector('canvas').getContext('2d');g.setTransform(2,0,0,2,0,0);draw(g,56,76,h,fit(h,56,76),false,0);
  b.onclick=()=>{sel=i;save();document.querySelectorAll('.course[data-i]').forEach(x=>x.setAttribute('aria-pressed',x===b))}});
+$('#gcalBtn').onclick=()=>{gcal=null;try{localStorage.removeItem('swinggolfcal')}catch(e){}$('#gcalBtn').textContent='Will learn your swing before your next shot'};
 $('#startBtn').onclick=async()=>{sfx('none');
  if(mode==='motion'){$('#startBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#startBtn').textContent='Tee off';
   if(!ok){mode='touch';document.querySelectorAll('#modeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));startRound();toast('Motion sensors blocked here, using Swipe',3200);return}}
