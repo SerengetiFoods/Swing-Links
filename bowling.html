@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#0e2317">
+<script src="sfx.js"></script>
 <title>Swing Links Bowling</title>
 <script src="vendor/three.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,7 +118,7 @@ segInit('#handSeg',hand,v=>hand=v);segInit('#modeSeg',mode,v=>mode=v);segInit('#
 const HS=()=>hand==='L'?-1:1;
 
 // ---------- audio ----------
-let AC=null;const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
+let AC=null;const ac=()=>(AC=SL.ac());
 function noise(dur,freq,type,vol){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**2;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(a.destination);s.start()}
 function tone(f,dur,vol,at){const a=ac();if(!a)return;const t=a.currentTime+(at||0),o=a.createOscillator(),g=a.createGain();o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02)}
 let rumble=null;
@@ -199,7 +200,7 @@ function bowl(mph,hook){
  closeSwing();ac();
  const v=clamp(mph,6,26)*.44704,ang=aimA+rand(-.004,.004);
  ball.vx=Math.sin(ang)*v;ball.vz=-Math.cos(ang)*v;ball.hook=clamp(hook,-1,1);ball.ph='roll';ball.mph=mph;
- phase='roll';roll={t:0,hits:0};standingBefore=standing();startRumble();buzz(30);
+ phase='roll';roll={t:0,hits:0};standingBefore=standing();SL.whoosh(.3);SL.noise(.18,140,'lowpass',.9);startRumble();buzz(30);
  $('#info').textContent=`${Math.round(mph)} mph${Math.abs(hook)>.15?` · ${Math.abs(hook)>.6?'big ':''}hook`:' · straight'}`;
 }
 function collide(a,ra,ma,b,rb,mb){const dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),m=ra+rb;if(d>=m||d===0)return 0;
@@ -211,7 +212,7 @@ function step(dt){
  if(b.ph==='roll'){
   if(!b.gutter){const back=clamp((-b.z-9)/6,0,1);b.vx+=-b.hook*HS()*1.15*back*dt*Math.min(1,Math.abs(b.vz)/5)}
   b.x+=b.vx*dt;b.z+=b.vz*dt;b.spin+=Math.hypot(b.vx,b.vz)/BALL_R*dt;
-  if(!b.gutter&&Math.abs(b.x)>LANE_HW+.02&&b.z>PIN_Z+.3){b.gutter=true;b.vx=0;b.x=Math.sign(b.x)*(LANE_HW+.12);flash('Gutter ball',1500);noise(.3,300,'lowpass',.5)}
+  if(!b.gutter&&Math.abs(b.x)>LANE_HW+.02&&b.z>PIN_Z+.3){b.gutter=true;b.vx=0;b.x=Math.sign(b.x)*(LANE_HW+.12);flash('Gutter ball',1500);SL.aww();noise(.3,300,'lowpass',.5)}
   if(b.z<DECK_END-.3){b.ph='pit';stopRumble();noise(.25,120,'lowpass',.9)}
  }
  for(const p of pins){if(p.gone)continue;
@@ -228,7 +229,7 @@ function rollDone(){
  const tenth=fi===9,r=f.rolls;let msg='';
  if(rollInFrame===0||(tenth&&(r.length===2&&r[0]===10||r.length===3&&(r[1]===10||r[0]+r[1]===10)))){if(knocked===10)msg='STRIKE!'}
  if(!msg&&knocked&&standing()===0)msg='SPARE!';
- if(msg){flash(msg,2000);tone(660,.15,.3,0);tone(880,.15,.3,.15);tone(1320,.3,.3,.3);buzz([40,60,40])}else flash(knocked===0?'Missed them all':knocked===1?'1 pin':`${knocked} pins`,1400);
+ if(msg){flash(msg,2000);tone(660,.15,.3,0);tone(880,.15,.3,.15);tone(1320,.3,.3,.3);buzz([40,60,40]);SL.cheer(msg==='STRIKE!'?2:1);setTimeout(()=>SL.say(msg==='STRIKE!'?'Strike!':'Spare!'),500)}else if(knocked===0)SL.aww();else if(knocked>=7)SL.cheer(0);else flash(knocked===0?'Missed them all':knocked===1?'1 pin':`${knocked} pins`,1400);
  let next=false,rerack=false;
  if(!tenth){if(knocked===10&&rollInFrame===0||rollInFrame===1){next=true;rerack=true}else rollInFrame=1}
  else{const n=r.length,sum2=r[0]+(r[1]||0);
@@ -278,7 +279,7 @@ cv.addEventListener('pointerup',()=>{drag=null});
 for(const[id,d]of[['#aL',-1],['#aR',1]]){let iv;const b=$(id),stop=()=>clearInterval(iv);b.addEventListener('pointerdown',()=>{if(phase!=='aim')return;aimA=clamp(aimA+d*.002,-.05,.05);iv=setInterval(()=>{if(phase==='aim')aimA=clamp(aimA+d*.002,-.05,.05)},60)});b.addEventListener('pointerup',stop);b.addEventListener('pointerleave',stop)}
 addEventListener('keydown',e=>{if(phase!=='aim')return;if(e.key==='ArrowLeft'){aimX=clamp(aimX-.02,-.4,.4);ball.x=aimX}if(e.key==='ArrowRight'){aimX=clamp(aimX+.02,-.4,.4);ball.x=aimX}if(e.key===' '){e.preventDefault();openSwing()}});
 $('#goBtn').onclick=async()=>{ac();if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Start game';if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));flash('Swipe mode',1800)}}
- $('#menu').hidden=true;$('#tip').textContent=mode==='touch'?'Drag to move · arrows to angle':'Drag to move · arrows to angle';newGame()};
+ SL.ambience('alley',1);$('#menu').hidden=true;$('#tip').textContent=mode==='touch'?'Drag to move · arrows to angle':'Drag to move · arrows to angle';newGame()};
 
 // ---------- loop ----------
 let last=performance.now(),sizeKey='',dummy=GL()?new THREE.Object3D():null;

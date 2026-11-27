@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#0e2317">
+<script src="sfx.js"></script>
 <title>Swing Links Tennis</title>
 <script src="vendor/three.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,7 +118,7 @@ segInit('#spdSeg',speed,v=>speed=+v);segInit('#sideSeg',side,v=>side=v);segInit(
 const HS=()=>hand==='L'?-1:1;
 
 // ---------- audio ----------
-let AC=null;const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state!=='running')AC.resume()}catch(e){}return AC};
+let AC=null;const ac=()=>(AC=SL.ac());
 let PAN=0;const outNode=a=>{if(!PAN||!a.createStereoPanner)return a.destination;const p=a.createStereoPanner();p.pan.value=PAN;p.connect(a.destination);return p};
 function speak(t,queue){const c=$('#cap');if(c){c.textContent=t;c.classList.add('on');clearTimeout(speak.t);speak.t=setTimeout(()=>c.classList.remove('on'),2600)}
  if(!voice||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance(t);u.rate=1.15;u.lang='en-US';window.__u=u;u.onend=u.onerror=()=>{try{AC&&AC.state!=='running'&&AC.resume()}catch(e){}};
@@ -213,7 +214,7 @@ function simShot(v,la,dir,top,y0,x0){let x=x0||0,y=y0||1,z=0,vx=Math.sin(dir)*Ma
  return{x,z,net}}
 function contactSound(t){if(!feed||feed.done||feed.sounded)return;const err=(t-feed.tc)/1000;if(Math.abs(err)>.14)return;if(feed.wide&&mode==='motion'&&steps-feed.s0<1)return;feed.sounded=true;const d=Math.max(0,Math.max(t,feed.tc)-performance.now());PAN=clamp(feed.xc/1.25,-1,1)*.6;sfx.pop(d/1000);PAN=0;setTimeout(()=>buzz(30),d)}
 function attempt(tHit,mph,strokeFh,face,aimYaw){face=face||0;
- if(!feed||feed.done||feed.swung)return;feed.swung=true;anim={t0:tHit-120,dur:240,fh:feed.fh};
+ if(!feed||feed.done||feed.swung)return;feed.swung=true;anim={t0:tHit-120,dur:240,fh:feed.fh};SL.whoosh(.35,0,clamp(feed.xc/1.25,-1,1)*.5);
  const err=(tHit-feed.tc)/1000,ms=Math.round(err*1000);
  if(feed.wide&&mode==='motion'&&steps-feed.s0<1){feed.res={miss:true,ms,mph,why:"You didn't get there"};sfx.whiff();return}
  if(play==='match'&&strokeCheck&&strokeFh!=null&&strokeFh!==(feed.fh>0)){feed.res={miss:true,ms,mph,why:`Wrong stroke, I called ${feed.fh>0?'forehand':'backhand'}`};sfx.whiff();return}
@@ -247,7 +248,7 @@ function finish(f){
   if(p){stats.pts+=p;stats.streak++}else stats.streak=0;stats.top=Math.max(stats.top,r.out);
   const where=whereTxt(r);
   showBoard(t+(p?` +${p}`:''),`${kindName(r.kind)} · ${Math.abs(r.ms)<=25?'perfect timing':Math.abs(r.ms)+' ms '+(r.ms<0?'early':'late')} · ${where}`,[[Math.round(r.mph),'racket mph'],[Math.round(r.out),'ball mph'],[p?Math.round((r.z-FAR)*FT)+' ft':'–','from baseline']],3000);
-  if(p===3){tone(660,.15,.3,0);tone(990,.25,.3,.15)}speak(t)}
+  if(p===3){tone(660,.15,.3,0);tone(990,.25,.3,.15);SL.cheer(1)}else if(p===2)SL.cheer(0);speak(t)}
  updHud();state='after';nextAt=performance.now()+(r&&!r.miss?1900:1500);
 }
 
@@ -264,9 +265,9 @@ function finishMatch(f){
   if(t){showBoard(t,r.kind==='overcooked'?'Face too closed, it dipped':r.kind==='wide open'?'Face too open, it sailed':'Point to your opponent',[[Math.round(r.out),'ball mph']],2600);pointTo(1,t,f.wide&&mode==='motion'?'Back to the middle.':'')}
   else{const deep=r.z<SVC,corner=r.z<FAR+2.6&&Math.abs(r.x)>HW-2.2;let ret=corner?.3:deep?.6:.82;if(r.out>85)ret*=.8;rally++;
    if(Math.random()<ret){oppX=clamp(r.x,-3.5,3.5);showBoard(corner?'Great shot!':deep?'Deep!':'In',`${kindName(r.kind)} · ${whereTxt(r)} · ${landTxt(r)}`,[[Math.round(r.out),'ball mph']],1500);next=Math.max(450,23/(r.out*.44704*.85)*1000)+120;quickNext=true;if(f.wide&&mode==='motion')speak('Back to the middle')}
-   else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);oppX=0;pointTo(0,w,f.wide&&mode==='motion'?'Back to the middle.':'')}}}
+   else{const w=corner?'Winner!':'They missed it';showBoard(w,'Your point!',[[Math.round(r.out),'ball mph']],2600);tone(660,.15,.3,0);tone(990,.25,.3,.15);SL.cheer(corner?1:0);oppX=0;pointTo(0,w,f.wide&&mode==='motion'?'Back to the middle.':'')}}}
  updHud();state='after';nextAt=now+next;
- if(matchOver){setTimeout(()=>{showBoard(games[0]>games[1]?'You win!':'Match lost',`${games[0]}–${games[1]} in games`,[],6000);setPaused(true);$('#feedBtn').textContent='New match'},1800)}
+ if(matchOver){if(games[0]>games[1])SL.cheer(2);setTimeout(()=>{showBoard(games[0]>games[1]?'You win!':'Match lost',`${games[0]}–${games[1]} in games`,[],6000);setPaused(true);$('#feedBtn').textContent='New match'},1800)}
 }
 
 // ---------- input ----------
@@ -347,7 +348,7 @@ $('#relearn').onclick=()=>{cal=null;try{localStorage.removeItem('swingtenniscal3
 $('#goBtn').onclick=async()=>{unlockAudio();tone(800,.05,.05,0);speak(play==='match'?'Stand in the middle, with room to step either way.':'Ball machine on.');
  if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Take the court';
   if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));showBoard('Swipe mode','Motion sensors are blocked here',[],2600)}}
- pad.hidden=mode!=='touch';$('#live').hidden=mode!=='motion';$('#menu').hidden=true;state='ready';score=[0,0];games=[0,0];matchOver=false;rally=0;updHud();lockScreen();
+ SL.ambience('outdoor',.8);pad.hidden=mode!=='touch';$('#live').hidden=mode!=='motion';$('#menu').hidden=true;state='ready';score=[0,0];games=[0,0];matchOver=false;rally=0;updHud();lockScreen();
  const intro=play==='match'?(mode==='motion'?'I call each ball. Step when I say step, hit on the last beep.':'I call each ball. Swipe on the last beep.'):'';
  if(cal&&(!cal.vf||(cal.fa==null&&yaw!=null)))cal=null;
  if(play==='match'&&mode==='motion'&&!cal){calStage=0;paused=true;$('#feedBtn').textContent='Pause';speak(intro,true);speak('Face the net. Swing one forehand, straight ahead.',true);setTimeout(()=>{calStage=1;mot.cPk=0},3000);setTimeout(()=>{if(calStage){cal=null;endCal("Let's just play.")}},20000);showBoard('Face the net','Swing one forehand straight ahead. Tap Pause to skip',[],12000)}

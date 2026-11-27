@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#0e2317">
+<script src="sfx.js"></script>
 <title>Swing Links Batting Cage</title>
 <script src="vendor/three.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -115,7 +116,7 @@ segInit('#spdSeg',speed,v=>speed=+v);segInit('#mixSeg',mix,v=>mix=+v);segInit('#
 
 // ---------- audio ----------
 let AC=null;
-const ac=()=>{try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume()}catch(e){}return AC};
+const ac=()=>(AC=SL.ac());
 function tone(f,dur,vol,at,type){const a=ac();if(!a)return;const t=a.currentTime+Math.max(0,at||0),o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+.02)}
 function noise(dur,freq,type,vol,at){const a=ac();if(!a)return;const b=a.createBuffer(1,a.sampleRate*dur,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=a.createBufferSource();s.buffer=b;const f=a.createBiquadFilter();f.type=type;f.frequency.value=freq;const g=a.createGain();g.gain.value=vol;s.connect(f);f.connect(g);g.connect(a.destination);s.start(a.currentTime+Math.max(0,at||0))}
 const sfx={crack(at){noise(.12,2600,'bandpass',1.6,at);tone(180,.12,.5,at||0,'triangle')},whiff(){noise(.25,900,'bandpass',.4)},thud(){noise(.15,300,'lowpass',.8)},launch(){noise(.18,500,'lowpass',.7);tone(90,.15,.3,0,'sawtooth')},whirr(){tone(140,.8,.07,0,'sawtooth')}};
@@ -219,14 +220,14 @@ function timingTxt(ms){const a=Math.abs(ms);return a<=25?'Perfect timing':`${a} 
 function finish(p){
  if(p.done)return;p.done=true;light.material.color.set(0x553300);
  const r=p.res;
- if(!r){showBoard('Strike','Taken. Hit it on the last beep!',[],2200)}
- else if(r.miss){showBoard('Swing and a miss',`${Math.abs(r.ms)>400?'Way':''} ${Math.abs(r.ms)} ms ${r.ms<0?'early':'late'}`.trim(),[[Math.round(r.mph),'bat mph']],2400)}
+ if(!r){showBoard('Strike','Taken. Hit it on the last beep!',[],2200);SL.whoosh(.3);SL.say('Strike!',{pitch:.8})}
+ else if(r.miss){SL.say('Strike!',{pitch:.8});showBoard('Swing and a miss',`${Math.abs(r.ms)>400?'Way':''} ${Math.abs(r.ms)} ms ${r.ms<0?'early':'late'}`.trim(),[[Math.round(r.mph),'bat mph']],2400)}
  else{const o=outcome(r),fair=Math.abs(r.spray)<=45;if(fair&&r.la>=-5)stats.hits++;stats.bestEV=Math.max(stats.bestEV,r.ev);if(fair)stats.bestD=Math.max(stats.bestD,r.dist);
   showBoard(o,timingTxt(r.ms)+(fair?` · to ${r.spray>12?(HS()>0?'left':'right'):r.spray<-12?(HS()>0?'right':'left'):'center'} field`:''),[[Math.round(r.mph),'bat mph'],[Math.round(r.ev),'exit mph'],[Math.round(r.la)+'°','launch'],[fair?Math.round(r.dist):'–','feet']],3200);
-  if(o==='HOME RUN!'){tone(660,.15,.3,0);tone(880,.15,.3,.15);tone(1100,.3,.3,.3)}}
+  if(o==='HOME RUN!'){tone(660,.15,.3,0);tone(880,.15,.3,.15);tone(1100,.3,.3,.3);SL.cheer(2);setTimeout(()=>SL.say('Home run!'),700)}else if(o==='Foul ball')SL.say('Foul ball',{pitch:.85});else if(o==='Line drive'||o==='Deep fly ball'){SL.cheer(1);SL.say(o)}else SL.cheer(0)}
  updHud();state='after';nextAt=performance.now()+(r&&!r.miss?3600:2800);
 }
-function startBatAnim(t){batAnim={t0:t-110,dur:220}}
+function startBatAnim(t){batAnim={t0:t-110,dur:220};SL.whoosh(.45)}
 
 // ---------- input: motion ----------
 const mot={listening:false,live:false,armed:false,active:false,peak:0,tHit:0,low:0};
@@ -278,7 +279,7 @@ function loop(now){
      if(h.pos.y<.037){h.pos.y=.037;h.vel.y=Math.abs(h.vel.y)*.35;h.vel.x*=.75;h.vel.z*=.75}
      if(Math.abs(h.pos.x)>2.2){h.pos.x=Math.sign(h.pos.x)*2.2;h.vel.x*=-.1;h.vel.z*=.3}
      if(h.pos.y>3.8){h.pos.y=3.8;h.vel.y*=-.1;h.vel.z*=.4}
-     if(h.pos.z<-22.6){h.pos.z=-22.6;h.vel.z*=-.08}
+     if(h.pos.z<-22.6){if(!h.netHit){h.netHit=1;SL.noise(.25,260,'lowpass',.6)}h.pos.z=-22.6;h.vel.z*=-.08}
      if(h.pos.z>3.2){h.pos.z=3.2;h.vel.z*=-.1}}
     ball.visible=true;ball.position.copy(h.pos);if(h.t>3.2)hitBall=null}}
   if(state==='after'&&!hitBall&&now>nextAt-600)ball.visible=false;
@@ -297,7 +298,7 @@ $('#setBtn').onclick=()=>{setPaused(true);$('#menu').hidden=false};
 $('#goBtn').onclick=async()=>{ac();tone(800,.05,.05,0);
  if(mode==='motion'){$('#goBtn').textContent='Checking motion sensors…';const ok=await enableMotion();$('#goBtn').textContent='Step in';
   if(!ok){mode='touch';$('#modeSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v==='touch'));showBoard('Swipe mode','Motion sensors are blocked here',[],2600)}}
- pad.hidden=mode!=='touch';$('#live').hidden=mode!=='motion';$('#menu').hidden=true;state='ready';updHud();setPaused(false);
+ SL.ambience('cage',1);pad.hidden=mode!=='touch';$('#live').hidden=mode!=='motion';$('#menu').hidden=true;state='ready';updHud();setPaused(false);
  if(mode==='motion')showBoard('Grip it like a bat',"Pitches start in a moment. Hit it on the last beep",[],2400);
 };
 if(GL){try{init()}catch(e){$('.note').textContent='3D could not start on this device: '+e.message}}else $('.note').textContent='The 3D engine did not load. Check your connection and reload.';

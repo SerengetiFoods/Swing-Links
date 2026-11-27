@@ -10,6 +10,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#0e2317">
+<script src="sfx.js"></script>
 <title>Swing Links 3D Golf</title>
 <script src="vendor/three.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -238,7 +239,7 @@ let toastT;function toast(t,ms=1600){const el=$('#toast');el.textContent=t;el.cl
 
 // ---------- sound ----------
 let AC=null;
-function sfx(k){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();const t=AC.currentTime,g=AC.createGain();g.connect(AC.destination);
+function sfx(k){try{AC=SL.ac();if(!AC)return;const t=AC.currentTime,g=AC.createGain();g.connect(AC.destination);
  const noise=(dur,freq,type,vol)=>{const b=AC.createBuffer(1,AC.sampleRate*dur,AC.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length)**3;const s=AC.createBufferSource();s.buffer=b;const f=AC.createBiquadFilter();f.type=type;f.frequency.value=freq;s.connect(f);f.connect(g);g.gain.value=vol;s.start(t)};
  const tone=(fr,dur,vol,at=0,type='sine')=>{const o=AC.createOscillator();o.type=type;o.frequency.value=fr;const gg=AC.createGain();gg.gain.setValueAtTime(vol,t+at);gg.gain.exponentialRampToValueAtTime(.001,t+at+dur);o.connect(gg);gg.connect(AC.destination);o.start(t+at);o.stop(t+at+dur)};
  if(k==='hit'){noise(.09,2200,'bandpass',1.2);tone(320,.08,.25)}
@@ -252,7 +253,7 @@ function sfx(k){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)()
 const buzz=ms=>{try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}};
 
 // ---------- flow ----------
-function startRound(){list=PLAYLISTS[sel];holes=list.holes;hi=0;scores=[];$('#menu').hidden=true;startHole()}
+function startRound(){SL.ambience('outdoor',1);list=PLAYLISTS[sel];holes=list.holes;hi=0;scores=[];$('#menu').hidden=true;startHole()}
 function startHole(){
  hole=holes[hi];strokes=0;Object.assign(ball,{x:0,y:0,z:0,vx:0,vy:0,vz:0,spin:0,ph:'rest',lip:false});
  const mph=Math.round(Math.random()*18),dir=Math.random()*TAU;wind={mph,dir,x:Math.sin(dir)*mph*.48889,y:Math.cos(dir)*mph*.48889};
@@ -295,7 +296,7 @@ function shoot(power,face,mph){
  else{Object.assign(ball,launch(c,bmph,dir,s));ball.tilt=face*.45;ball.ph='air'}
  shotL={club:c.n,mph,ball:bmph,carry:null,off:0,est:mode!=='motion'};shotAim=aim;
  ball.bounced=false;ball.thru=new Set();if(c.putt)ball.back=0;
- shotDir=dir;phase='fly';sfx(c.putt?'putt':'hit');buzz(c.putt?15:35);hud();
+ shotDir=dir;phase='fly';if(!c.putt)SL.whoosh(.35);sfx(c.putt?'putt':'hit');buzz(c.putt?15:35);hud();
  const spinTxt=c.putt||!spinSel?'':spinSel<0?' · Backspin':' · Topspin';const hf=face*(hand==='L'?-1:1),shape=c.putt?'':Math.abs(hf)<.15?'Pure strike':hf>0?(hf>.5?'Slice':'Fade'):(hf<-.5?'Hook':'Draw');
  toast(`${Math.round(mph)} mph swing · ${Math.round(bmph)} mph ball${shape?' · '+shape:''}${spinTxt}`,1500);showStats();
 }
@@ -307,6 +308,7 @@ function step(dt){
   if(b.z<=0){b.z=0;const s=surf(b.x,b.y);if(s==='water')return penalty(s);
    if(!hole.range&&Math.hypot(b.x-hole.pin[0],b.y-hole.pin[1])<.14)return holed();
    const S=SURF[s];let f=S.f;
+   if(!b.bounced){if(s==='sand')SL.noise(.28,650,'lowpass',.7);else if(s==='rough'||s==='deep')SL.noise(.12,300,'lowpass',.45);else SL.noise(.1,220,'lowpass',.7)}
    if(!b.bounced&&shotL){const dx=b.x-prev.x,dy=b.y-prev.y;shotL.carry=Math.hypot(dx,dy);shotL.off=dx*Math.cos(shotAim)-dy*Math.sin(shotAim);showStats()}
    if(!b.bounced){b.bounced=true;f=clamp(S.f*(1-.4*b.back),.06,.93);
     if(b.back>1.55&&(s==='green'||s==='fairway')&&-b.vz>3){b.vx*=-.1*(b.back-.5);b.vy*=-.1*(b.back-.5);b.vz=Math.min(-b.vz*S.e*.4,1.2);b.tilt=0;sfx('bounce');toast('Backspin! It sucks back',1200);return}}
@@ -323,7 +325,7 @@ function step(dt){
 function penalty(s){
  const b=ball;b.vx=b.vy=b.vz=0;b.z=0;b.ph='rest';strokes++;phase='wait';sfx(s==='water'?'splash':'tree');
  if(s==='oob'){b.x=prev.x;b.y=prev.y;toast('Out of bounds · +1, replay',2000)}
- else{let x=b.x,y=b.y;const dx=prev.x-x,dy=prev.y-y,L=Math.hypot(dx,dy)||1;for(let i=0;i<L;i++){x+=dx/L;y+=dy/L;const q=surfOf(hole,x,y);if(q!=='water'&&q!=='oob'){x+=dx/L*2;y+=dy/L*2;break}}b.x=x;b.y=y;toast('Splash! Drop · +1',2000)}
+ else{let x=b.x,y=b.y;const dx=prev.x-x,dy=prev.y-y,L=Math.hypot(dx,dy)||1;for(let i=0;i<L;i++){x+=dx/L;y+=dy/L;const q=surfOf(hole,x,y);if(q!=='water'&&q!=='oob'){x+=dx/L*2;y+=dy/L*2;break}}b.x=x;b.y=y;toast('Splash! Drop · +1',2000);SL.aww()}
  setTimeout(nextShot,1400);
 }
 let autoP=null;
@@ -341,7 +343,7 @@ function holed(){const b=ball;b.x=hole.pin[0];b.y=hole.pin[1];b.z=0;b.vx=b.vy=b.
 const scoreName=(s,p)=>s===1?'Hole in one!':({'-3':'Albatross!','-2':'Eagle!','-1':'Birdie!','0':'Par','1':'Bogey','2':'Double bogey','3':'Triple bogey'}[s-p]||`+${s-p}`);
 function holeDone(){
  phase='done';scores[hi]=strokes;const par=hole.par,tp=scores.reduce((a,s,i)=>a+s-holes[i].par,0);
- $('#rTitle').textContent=scoreName(strokes,par);
+ $('#rTitle').textContent=scoreName(strokes,par);{const d=strokes-par;if(strokes===1||d<=-2)SL.cheer(2);else if(d===-1)SL.cheer(1);else if(d===0)SL.cheer(0);else if(d>=2)SL.aww();setTimeout(()=>SL.say(scoreName(strokes,par).replace('!','')),d<=-1?900:400)}
  $('#rSub').textContent=`${strokes} stroke${strokes>1?'s':''} on a par ${par}. Round: ${tp===0?'even':tp>0?'+'+tp:tp}.`;
  renderCard();const lastH=hi===holes.length-1;$('#rNext').textContent=lastH?'Play again':'Next hole';$('#res').hidden=false;
 }
