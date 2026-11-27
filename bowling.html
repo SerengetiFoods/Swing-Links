@@ -102,6 +102,8 @@ h1{font-size:38px;line-height:1.05;margin:0 0 6px;font-weight:900}h1 i{color:var
 
 <script>
 {
+try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+
 const $=s=>document.querySelector(s);
 const cv=$('#cv');let W=1,H=1;
 const ro=new ResizeObserver(()=>{const r=cv.getBoundingClientRect();W=Math.max(r.width,1);H=Math.max(r.height,1)});ro.observe(cv);

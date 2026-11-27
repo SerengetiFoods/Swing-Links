@@ -1,5 +1,5 @@
 // Swing Links offline cache
-const V='swing-links-v1';
+const V='swing-links-v2';
 const CORE=['./','index.html','golf.html','baseball.html','bowling.html','tennis.html','vendor/three.min.js','manifest.json','icon-192.png','icon-512.png','icon-180.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});

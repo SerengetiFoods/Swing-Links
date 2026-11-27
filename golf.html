@@ -158,6 +158,8 @@ th:first-child,td:first-child{text-align:left;color:var(--mute)}
 
 <script>
 {
+try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+
 const $=s=>document.querySelector(s);
 const cv=$('#cv');
 const G=10.7,DEG=Math.PI/180,TAU=Math.PI*2;

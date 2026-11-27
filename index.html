@@ -75,6 +75,8 @@ h1{font-size:44px;line-height:1.02;margin:6px 0 6px;font-weight:900;text-wrap:ba
     <div class="row"><span>I play</span><div class="seg" id="handSeg"><button data-v="R">Right-handed</button><button data-v="L">Left-handed</button></div></div>
     <div class="row"><span>Swing with</span><div class="seg" id="modeSeg"><button data-v="motion">Phone motion</button><button data-v="touch">Swipe</button></div></div>
     <div class="row"><span>Swing strength</span><div class="seg" id="sensSeg"><button data-v="0.6">Easy</button><button data-v="1">Normal</button><button data-v="1.4">Pro</button></div></div>
+    <button id="soundTest" style="font:inherit;font-weight:800;width:100%;min-height:48px;border-radius:12px;border:0;background:#ef4b36;color:#fff;margin:4px 0 10px;cursor:pointer">Test sound</button>
+    <p id="soundMsg" style="font-size:14px;color:var(--mute);margin:0 0 8px"></p>
     <ul class="tips">
       <li>Each game shows a live swing bar, so you can see your swings being measured.</li>
       <li>Swings not registering? Choose <b>Easy</b>. Readings too strong? Choose <b>Pro</b>.</li>
@@ -90,7 +92,11 @@ let hand='R',mode='motion',sens=1;
 try{hand=localStorage.getItem('swinghand')||'R';const sh=JSON.parse(localStorage.getItem('swingshared')||'{}');if(sh.mode)mode=sh.mode;if(sh.sens)sens=+sh.sens}catch(e){}
 const save=()=>{try{localStorage.setItem('swinghand',hand);localStorage.setItem('swingshared',JSON.stringify({mode,sens}))}catch(e){}};
 function segInit(id,val,set){const s=$(id),upd=v=>s.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===String(v)));upd(val);s.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);upd(b.dataset.v);save()})}
-segInit('#handSeg',hand,v=>hand=v);segInit('#modeSeg',mode,v=>mode=v);segInit('#sensSeg',sens,v=>sens=+v);
+segInit('#handSeg',hand,v=>hand=v);
+$('#soundTest').onclick=()=>{try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
+ try{const a=new(window.AudioContext||window.webkitAudioContext)();a.resume();[0,.35,.7].forEach((t,i)=>{const o=a.createOscillator(),g=a.createGain();o.frequency.value=i<2?880:1560;g.gain.setValueAtTime(.4,a.currentTime+t);g.gain.exponentialRampToValueAtTime(.001,a.currentTime+t+.12);o.connect(g);g.connect(a.destination);o.start(a.currentTime+t);o.stop(a.currentTime+t+.15)})}catch(e){}
+ setTimeout(()=>{try{const u=new SpeechSynthesisUtterance('Sound check. You should hear three beeps and this voice.');u.lang='en-US';speechSynthesis.cancel();speechSynthesis.speak(u)}catch(e){}},1100);
+ $('#soundMsg').textContent='Playing: beep, beep, BEEP, then a voice. Nothing? Turn the volume up and check the switch on the side of your phone.'};segInit('#modeSeg',mode,v=>mode=v);segInit('#sensSeg',sens,v=>sens=+v);
 }
 </script>
 <script>if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
